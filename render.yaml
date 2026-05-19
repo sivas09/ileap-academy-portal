@@ -34,4 +34,4 @@ services:
 
 databases:
   - name: ileap-english-portal-db
-    plan: starter
+    plan: basic-1gb
