@@ -34,5 +34,4 @@ services:
 
 databases:
   - name: ileap-english-portal-db
-    plan: basic-256mb
-    diskSizeGB: 5
+    plan: free
