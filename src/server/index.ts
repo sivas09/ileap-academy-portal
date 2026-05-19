@@ -1,0 +1,814 @@
+import "dotenv/config";
+import { AccessMode, PrismaClient, Resource, Role } from "@prisma/client";
+import bcrypt from "bcryptjs";
+import cors from "cors";
+import express from "express";
+import helmet from "helmet";
+import jwt from "jsonwebtoken";
+import multer from "multer";
+import OpenAI from "openai";
+import path from "path";
+import Stripe from "stripe";
+import { z } from "zod";
+import { resolveFileKey, saveUploadedFile } from "./services/storage.js";
+
+const prisma = new PrismaClient();
+const app = express();
+const port = Number(process.env.PORT ?? 4000);
+const jwtSecret = process.env.JWT_SECRET ?? "local-development-secret";
+const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
+const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
+const appUrl = process.env.APP_URL ?? "http://localhost:5174";
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = new Set([
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "image/jpeg",
+      "image/png"
+    ]);
+    cb(null, allowed.has(file.mimetype));
+  }
+});
+
+app.use(helmet());
+app.use(cors({ origin: true, credentials: true }));
+
+app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async (req, res) => {
+  if (!stripe || !process.env.STRIPE_WEBHOOK_SECRET) {
+    res.status(503).json({ error: "Stripe webhook is not configured" });
+    return;
+  }
+
+  const signature = req.headers["stripe-signature"];
+  if (!signature) {
+    res.status(400).json({ error: "Missing Stripe signature" });
+    return;
+  }
+
+  let event: any;
+  try {
+    event = stripe.webhooks.constructEvent(req.body, signature, process.env.STRIPE_WEBHOOK_SECRET);
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : "Invalid Stripe webhook signature" });
+    return;
+  }
+
+  if (event.type === "checkout.session.completed") {
+    const session = event.data.object as any;
+    const orderId = session.metadata?.orderId;
+    if (orderId) {
+      await prisma.order.updateMany({
+        where: { id: orderId },
+        data: {
+          stripeCheckoutSession: session.id,
+          stripePaymentIntent: typeof session.payment_intent === "string" ? session.payment_intent : null
+        }
+      });
+      await unlockOrderEntitlements(orderId);
+    }
+  }
+
+  res.json({ received: true });
+});
+
+app.use(express.json({ limit: "2mb" }));
+
+type AuthUser = {
+  id: string;
+  role: Role;
+  email: string;
+};
+
+declare global {
+  namespace Express {
+    interface Request {
+      user?: AuthUser;
+    }
+  }
+}
+
+function signToken(user: AuthUser) {
+  return jwt.sign(user, jwtSecret, { expiresIn: "8h" });
+}
+
+function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const header = req.headers.authorization;
+  const token = header?.startsWith("Bearer ") ? header.slice(7) : null;
+
+  if (!token) {
+    res.status(401).json({ error: "Missing authorization token" });
+    return;
+  }
+
+  try {
+    req.user = jwt.verify(token, jwtSecret) as AuthUser;
+    next();
+  } catch {
+    res.status(401).json({ error: "Invalid or expired token" });
+  }
+}
+
+function requireRole(...roles: Role[]) {
+  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (!req.user || !roles.includes(req.user.role)) {
+      res.status(403).json({ error: "You do not have permission to perform this action" });
+      return;
+    }
+    next();
+  };
+}
+
+async function writeAudit(actorId: string | undefined, action: "CREATE" | "UPDATE" | "LOGIN" | "ACCESS_CHANGE" | "PROMPT_CHANGE" | "PAYMENT_EVENT", entityType: string, entityId?: string, metadata?: unknown) {
+  await prisma.auditLog.create({
+    data: {
+      actorId,
+      action,
+      entityType,
+      entityId,
+      metadata: metadata ? JSON.stringify(metadata) : null
+    }
+  });
+}
+
+function publicUser(user: {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: Role;
+  status: string;
+  student?: { level?: { id: string; code: string; name: string; gradeBand: string } } | null;
+}) {
+  return {
+    id: user.id,
+    email: user.email,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    role: user.role,
+    status: user.status,
+    level: user.student?.level ?? null
+  };
+}
+
+async function getStudentLevelId(userId: string) {
+  const profile = await prisma.studentProfile.findUnique({ where: { userId } });
+  return profile?.levelId ?? null;
+}
+
+function canAccessResource(resource: Resource, studentLevelId: string | null, entitlementIds: Set<string>) {
+  if (!resource.isPublished) return false;
+  if (resource.accessMode === AccessMode.FREE) return true;
+  if (resource.accessMode === AccessMode.LEVEL_ASSIGNED) return Boolean(resource.levelId && resource.levelId === studentLevelId);
+  return entitlementIds.has(resource.id);
+}
+
+async function assertResourceAccess(resourceId: string, user: AuthUser) {
+  const resource = await prisma.resource.findUnique({ where: { id: resourceId } });
+  if (!resource) return null;
+  if (user.role === "ADMIN" || user.role === "TEACHER") return resource;
+
+  const studentLevelId = await getStudentLevelId(user.id);
+  const entitlement = await prisma.entitlement.findFirst({
+    where: { userId: user.id, resourceId: resource.id, isActive: true }
+  });
+
+  return canAccessResource(resource, studentLevelId, new Set(entitlement ? [resource.id] : [])) ? resource : null;
+}
+
+async function unlockOrderEntitlements(orderId: string) {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: {
+      items: {
+        include: {
+          product: {
+            include: { resources: true }
+          }
+        }
+      }
+    }
+  });
+
+  if (!order) return null;
+
+  await prisma.order.update({ where: { id: order.id }, data: { status: "PAID" } });
+
+  for (const item of order.items) {
+    for (const productResource of item.product.resources) {
+      await prisma.entitlement.upsert({
+        where: {
+          userId_resourceId_source: {
+            userId: order.userId,
+            resourceId: productResource.resourceId,
+            source: "PURCHASE"
+          }
+        },
+        update: { isActive: true },
+        create: {
+          userId: order.userId,
+          resourceId: productResource.resourceId,
+          source: "PURCHASE",
+          isActive: true
+        }
+      });
+    }
+  }
+
+  await writeAudit(undefined, "PAYMENT_EVENT", "Order", order.id, { status: "PAID" });
+  return order;
+}
+
+const loginSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8)
+});
+
+const signupSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8),
+  firstName: z.string().min(1),
+  lastName: z.string().min(1),
+  levelId: z.string().min(1)
+});
+
+const resourceSchema = z.object({
+  title: z.string().min(2),
+  description: z.string().min(2),
+  type: z.enum(["DOCUMENT", "PDF", "WORKSHEET", "VIDEO_LINK", "BOOK"]),
+  accessMode: z.enum(["FREE", "LEVEL_ASSIGNED", "INDIVIDUAL_PURCHASE", "BUNDLE_PURCHASE"]),
+  url: z.string().url().optional().nullable(),
+  fileKey: z.string().optional().nullable(),
+  levelId: z.string().optional().nullable(),
+  isPublished: z.boolean().default(false)
+});
+
+const uploadedResourceSchema = resourceSchema.extend({
+  isPublished: z.union([z.boolean(), z.string()]).transform((value) => value === true || value === "true")
+});
+
+const assignmentSchema = z.object({
+  title: z.string().min(2),
+  instructions: z.string().min(10),
+  levelId: z.string().min(1),
+  isPublished: z.boolean().default(false),
+  dueAt: z.string().optional().nullable()
+});
+
+const productSchema = z.object({
+  title: z.string().min(2),
+  description: z.string().min(2),
+  type: z.enum(["INDIVIDUAL", "BUNDLE"]),
+  priceCents: z.coerce.number().int().min(50),
+  currency: z.string().min(3).max(3).default("usd"),
+  levelId: z.string().optional().nullable(),
+  resourceIds: z.array(z.string()).min(1),
+  isActive: z.boolean().default(true)
+});
+
+const submissionSchema = z.object({
+  assignmentId: z.string().optional().nullable(),
+  pastedText: z.string().min(20).max(12000)
+});
+
+const aiPromptSchema = z.object({
+  name: z.string().min(2),
+  promptText: z.string().min(20)
+});
+
+app.get("/api/health", (_req, res) => {
+  res.json({ ok: true });
+});
+
+app.get("/api/public/levels", async (_req, res) => {
+  const levels = await prisma.level.findMany({ orderBy: { sortOrder: "asc" } });
+  res.json(levels);
+});
+
+app.get("/api/public/products", async (_req, res) => {
+  const products = await prisma.product.findMany({
+    where: { isActive: true },
+    include: { level: true, resources: { include: { resource: true } } },
+    orderBy: { createdAt: "desc" }
+  });
+  res.json(products);
+});
+
+app.post("/api/auth/signup", async (req, res) => {
+  const input = signupSchema.safeParse(req.body);
+  if (!input.success) {
+    res.status(400).json({ error: input.error.flatten() });
+    return;
+  }
+
+  const level = await prisma.level.findUnique({ where: { id: input.data.levelId } });
+  if (!level) {
+    res.status(400).json({ error: "Selected level does not exist" });
+    return;
+  }
+
+  const passwordHash = await bcrypt.hash(input.data.password, 12);
+  const user = await prisma.user.create({
+    data: {
+      email: input.data.email.toLowerCase(),
+      passwordHash,
+      firstName: input.data.firstName,
+      lastName: input.data.lastName,
+      role: "STUDENT",
+      student: { create: { levelId: level.id } }
+    },
+    include: { student: { include: { level: true } } }
+  });
+
+  const authUser = { id: user.id, role: user.role, email: user.email };
+  await writeAudit(user.id, "CREATE", "User", user.id, { source: "student_signup", level: level.code });
+
+  res.status(201).json({ token: signToken(authUser), user: publicUser(user) });
+});
+
+app.post("/api/auth/login", async (req, res) => {
+  const input = loginSchema.safeParse(req.body);
+  if (!input.success) {
+    res.status(400).json({ error: input.error.flatten() });
+    return;
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { email: input.data.email.toLowerCase() },
+    include: { student: { include: { level: true } } }
+  });
+
+  if (!user || user.status !== "ACTIVE" || !(await bcrypt.compare(input.data.password, user.passwordHash))) {
+    res.status(401).json({ error: "Invalid email or password" });
+    return;
+  }
+
+  const authUser = { id: user.id, role: user.role, email: user.email };
+  await writeAudit(user.id, "LOGIN", "User", user.id);
+
+  res.json({ token: signToken(authUser), user: publicUser(user) });
+});
+
+app.get("/api/me", requireAuth, async (req, res) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.user!.id },
+    include: { student: { include: { level: true } } }
+  });
+  res.json(user ? publicUser(user) : null);
+});
+
+app.get("/api/dashboard", requireAuth, async (req, res) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.user!.id },
+    include: { student: { include: { level: true } }, teacher: { include: { levels: { include: { level: true } } } } }
+  });
+
+  if (!user) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  const levels = await prisma.level.findMany({ orderBy: { sortOrder: "asc" } });
+  const studentLevelId = user.role === "STUDENT" ? user.student?.levelId ?? null : null;
+  const entitlements = await prisma.entitlement.findMany({
+    where: { userId: user.id, isActive: true },
+    select: { resourceId: true }
+  });
+  const entitlementIds = new Set(entitlements.map((item) => item.resourceId));
+
+  const resourceWhere =
+    user.role === "STUDENT"
+      ? { isPublished: true }
+      : user.role === "TEACHER"
+        ? { levelId: { in: user.teacher?.levels.map((item) => item.levelId) ?? [] } }
+        : {};
+
+  const allResources = await prisma.resource.findMany({
+    where: resourceWhere,
+    include: { level: true },
+    orderBy: { createdAt: "desc" }
+  });
+
+  const resources =
+    user.role === "STUDENT"
+      ? allResources.map((resource) => ({
+          ...resource,
+          isAccessible: canAccessResource(resource, studentLevelId, entitlementIds)
+        }))
+      : allResources.map((resource) => ({ ...resource, isAccessible: true }));
+
+  const assignmentWhere =
+    user.role === "STUDENT"
+      ? { isPublished: true, levelId: studentLevelId ?? "" }
+      : user.role === "TEACHER"
+        ? { levelId: { in: user.teacher?.levels.map((item) => item.levelId) ?? [] } }
+        : {};
+
+  const assignments = await prisma.assignment.findMany({
+    where: assignmentWhere,
+    include: { level: true, _count: { select: { submissions: true } } },
+    orderBy: { createdAt: "desc" }
+  });
+
+  const products = await prisma.product.findMany({
+    where: { isActive: true },
+    include: { level: true, resources: { include: { resource: true } } },
+    orderBy: { createdAt: "desc" }
+  });
+  const productsWithPurchaseStatus = products.map((product) => ({
+    ...product,
+    isPurchased: product.resources.some((item) => entitlementIds.has(item.resourceId))
+  }));
+
+  const submissions = await prisma.writingSubmission.findMany({
+    where: user.role === "STUDENT" ? { studentId: user.id } : {},
+    include: { assignment: true, feedback: true },
+    orderBy: { createdAt: "desc" },
+    take: user.role === "ADMIN" ? 50 : 10
+  });
+
+  res.json({
+    user: publicUser(user),
+    levels,
+    resources,
+    assignments,
+    products: productsWithPurchaseStatus,
+    submissions
+  });
+});
+
+app.post("/api/admin/resources", requireAuth, requireRole("ADMIN", "TEACHER"), async (req, res) => {
+  const input = resourceSchema.safeParse(req.body);
+  if (!input.success) {
+    res.status(400).json({ error: input.error.flatten() });
+    return;
+  }
+
+  const resource = await prisma.resource.create({ data: input.data });
+  await writeAudit(req.user?.id, "CREATE", "Resource", resource.id, { title: resource.title });
+  res.status(201).json(resource);
+});
+
+app.post("/api/admin/resources/upload", requireAuth, requireRole("ADMIN", "TEACHER"), upload.single("file"), async (req, res) => {
+  if (!req.file) {
+    res.status(400).json({ error: "File is required" });
+    return;
+  }
+
+  const stored = await saveUploadedFile(req.file);
+  const input = uploadedResourceSchema.safeParse({
+    ...req.body,
+    fileKey: stored.fileKey,
+    url: req.body.url || null,
+    levelId: req.body.levelId || null
+  });
+
+  if (!input.success) {
+    res.status(400).json({ error: input.error.flatten() });
+    return;
+  }
+
+  const resource = await prisma.resource.create({
+    data: {
+      title: input.data.title,
+      description: input.data.description,
+      type: input.data.type,
+      accessMode: input.data.accessMode,
+      url: input.data.url,
+      fileKey: input.data.fileKey,
+      levelId: input.data.levelId,
+      isPublished: input.data.isPublished
+    }
+  });
+
+  await writeAudit(req.user?.id, "CREATE", "Resource", resource.id, {
+    title: resource.title,
+    fileKey: resource.fileKey,
+    originalName: stored.originalName,
+    mimeType: stored.mimeType,
+    size: stored.size
+  });
+  res.status(201).json(resource);
+});
+
+app.get("/api/resources/:id/open", requireAuth, async (req, res) => {
+  const resource = await assertResourceAccess(String(req.params.id), req.user!);
+  if (!resource) {
+    res.status(404).json({ error: "Resource not found or not accessible" });
+    return;
+  }
+
+  if (resource.url && !resource.fileKey) {
+    res.json({ type: "url", url: resource.url });
+    return;
+  }
+
+  if (!resource.fileKey) {
+    res.status(404).json({ error: "Resource file is not available" });
+    return;
+  }
+
+  try {
+    res.sendFile(resolveFileKey(resource.fileKey));
+  } catch {
+    res.status(400).json({ error: "Invalid resource file" });
+  }
+});
+
+app.post("/api/admin/assignments", requireAuth, requireRole("ADMIN", "TEACHER"), async (req, res) => {
+  const input = assignmentSchema.safeParse(req.body);
+  if (!input.success) {
+    res.status(400).json({ error: input.error.flatten() });
+    return;
+  }
+
+  const assignment = await prisma.assignment.create({
+    data: {
+      ...input.data,
+      dueAt: input.data.dueAt ? new Date(input.data.dueAt) : null
+    }
+  });
+  await writeAudit(req.user?.id, "CREATE", "Assignment", assignment.id, { title: assignment.title });
+  res.status(201).json(assignment);
+});
+
+app.post("/api/admin/products", requireAuth, requireRole("ADMIN"), async (req, res) => {
+  const input = productSchema.safeParse(req.body);
+  if (!input.success) {
+    res.status(400).json({ error: input.error.flatten() });
+    return;
+  }
+
+  const resources = await prisma.resource.findMany({ where: { id: { in: input.data.resourceIds } } });
+  if (resources.length !== input.data.resourceIds.length) {
+    res.status(400).json({ error: "One or more selected resources do not exist" });
+    return;
+  }
+
+  const product = await prisma.product.create({
+    data: {
+      title: input.data.title,
+      description: input.data.description,
+      type: input.data.type,
+      priceCents: input.data.priceCents,
+      currency: input.data.currency.toLowerCase(),
+      levelId: input.data.levelId,
+      isActive: input.data.isActive,
+      resources: {
+        create: input.data.resourceIds.map((resourceId) => ({ resourceId }))
+      }
+    },
+    include: { level: true, resources: { include: { resource: true } } }
+  });
+
+  await writeAudit(req.user?.id, "CREATE", "Product", product.id, { title: product.title, priceCents: product.priceCents });
+  res.status(201).json(product);
+});
+
+app.post("/api/shop/checkout", requireAuth, requireRole("STUDENT", "ADMIN"), async (req, res) => {
+  const input = z.object({ productId: z.string() }).safeParse(req.body);
+  if (!input.success) {
+    res.status(400).json({ error: input.error.flatten() });
+    return;
+  }
+
+  if (!stripe) {
+    res.status(503).json({ error: "Stripe is not configured. Add STRIPE_SECRET_KEY to the server environment." });
+    return;
+  }
+
+  const product = await prisma.product.findUnique({
+    where: { id: input.data.productId },
+    include: { resources: true }
+  });
+  if (!product || !product.isActive) {
+    res.status(404).json({ error: "Product not found" });
+    return;
+  }
+
+  const order = await prisma.order.create({
+    data: {
+      userId: req.user!.id,
+      totalCents: product.priceCents,
+      currency: product.currency,
+      items: {
+        create: {
+          productId: product.id,
+          titleSnapshot: product.title,
+          priceCentsSnapshot: product.priceCents
+        }
+      }
+    },
+    include: { items: true }
+  });
+
+  const session = await stripe.checkout.sessions.create({
+    mode: "payment",
+    payment_method_types: ["card"],
+    line_items: [
+      {
+        quantity: 1,
+        price_data: {
+          currency: product.currency,
+          unit_amount: product.priceCents,
+          product_data: {
+            name: product.title,
+            description: product.description
+          }
+        }
+      }
+    ],
+    metadata: {
+      orderId: order.id,
+      userId: req.user!.id,
+      productId: product.id
+    },
+    success_url: `${appUrl}/?checkout=success`,
+    cancel_url: `${appUrl}/?checkout=cancelled`
+  });
+
+  await prisma.order.update({
+    where: { id: order.id },
+    data: { stripeCheckoutSession: session.id }
+  });
+  await writeAudit(req.user?.id, "CREATE", "Order", order.id, { productId: product.id, checkoutSession: session.id });
+
+  res.status(201).json({ checkoutUrl: session.url, orderId: order.id });
+});
+
+app.post("/api/student/submissions", requireAuth, requireRole("STUDENT", "ADMIN"), async (req, res) => {
+  const input = submissionSchema.safeParse(req.body);
+  if (!input.success) {
+    res.status(400).json({ error: input.error.flatten() });
+    return;
+  }
+
+  const activePrompt = await prisma.aiPrompt.findFirst({ where: { isActive: true }, orderBy: { version: "desc" } });
+  const levelId = req.user!.role === "STUDENT" ? await getStudentLevelId(req.user!.id) : null;
+
+  const submission = await prisma.writingSubmission.create({
+    data: {
+      studentId: req.user!.id,
+      assignmentId: input.data.assignmentId,
+      pastedText: input.data.pastedText,
+      levelId
+    }
+  });
+
+  const fallbackFeedback = {
+    markOutOf10: null,
+    content: "AI tutor is not configured yet. Your writing was saved, and this placeholder shows the feedback format.",
+    grammarAndPunctuation: "The live AI tutor will identify grammar and punctuation mistakes and explain why they should be corrected.",
+    academicVocabulary: "The live AI tutor will suggest stronger academic vocabulary where appropriate.",
+    structure: "The live AI tutor will review paragraph and essay structure.",
+    goodTransitionWords: "The live AI tutor will suggest useful transition words.",
+    overall: "Configure OPENAI_API_KEY and the active prompt to generate live feedback."
+  };
+
+  let feedbackJson = JSON.stringify(fallbackFeedback);
+  let model: string | null = null;
+  let error: string | null = null;
+
+  if (openai && activePrompt) {
+    model = process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
+    try {
+      const completion = await openai.chat.completions.create({
+        model,
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content:
+              activePrompt.promptText +
+              "\nReturn valid JSON only with these exact keys: markOutOf10, content, grammarAndPunctuation, academicVocabulary, structure, goodTransitionWords, overall. markOutOf10 must be a number from 0 to 10. Each feedback section should explain mistakes and why they are mistakes."
+          },
+          { role: "user", content: input.data.pastedText }
+        ]
+      });
+      feedbackJson = completion.choices[0]?.message.content ?? feedbackJson;
+    } catch (err) {
+      error = err instanceof Error ? err.message : "AI tutor failed";
+    }
+  }
+
+  const feedback = await prisma.aiFeedback.create({
+    data: {
+      submissionId: submission.id,
+      promptId: activePrompt?.id,
+      feedbackJson,
+      model,
+      error
+    }
+  });
+
+  await writeAudit(req.user?.id, "CREATE", "WritingSubmission", submission.id, { promptVersion: activePrompt?.version ?? null });
+  res.status(201).json({ submission, feedback });
+});
+
+app.get("/api/admin/users", requireAuth, requireRole("ADMIN"), async (_req, res) => {
+  const users = await prisma.user.findMany({
+    include: { student: { include: { level: true } }, teacher: { include: { levels: { include: { level: true } } } } },
+    orderBy: { createdAt: "desc" }
+  });
+  res.json(users.map(publicUser));
+});
+
+app.get("/api/review/submissions", requireAuth, requireRole("ADMIN", "TEACHER"), async (req, res) => {
+  const levelId = req.query.levelId?.toString();
+  const user = await prisma.user.findUnique({
+    where: { id: req.user!.id },
+    include: { teacher: { include: { levels: true } } }
+  });
+
+  const teacherLevelIds = user?.teacher?.levels.map((item) => item.levelId) ?? [];
+  const allowedLevelIds = req.user!.role === "ADMIN" ? undefined : teacherLevelIds;
+
+  if (req.user!.role === "TEACHER" && allowedLevelIds?.length === 0) {
+    res.json([]);
+    return;
+  }
+
+  if (req.user!.role === "TEACHER" && levelId && !allowedLevelIds?.includes(levelId)) {
+    res.status(403).json({ error: "You cannot review submissions for this level" });
+    return;
+  }
+
+  const submissions = await prisma.writingSubmission.findMany({
+    where: {
+      ...(levelId ? { levelId } : {}),
+      ...(allowedLevelIds ? { levelId: { in: allowedLevelIds } } : {})
+    },
+    include: {
+      student: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          student: { include: { level: true } }
+        }
+      },
+      assignment: { include: { level: true } },
+      feedback: { include: { prompt: true } }
+    },
+    orderBy: { createdAt: "desc" },
+    take: 100
+  });
+
+  res.json(submissions);
+});
+
+app.get("/api/admin/ai-prompts", requireAuth, requireRole("ADMIN"), async (_req, res) => {
+  const prompts = await prisma.aiPrompt.findMany({
+    include: { editedBy: { select: { firstName: true, lastName: true, email: true } } },
+    orderBy: [{ isActive: "desc" }, { version: "desc" }]
+  });
+  res.json(prompts);
+});
+
+app.post("/api/admin/ai-prompts", requireAuth, requireRole("ADMIN"), async (req, res) => {
+  const input = aiPromptSchema.safeParse(req.body);
+  if (!input.success) {
+    res.status(400).json({ error: input.error.flatten() });
+    return;
+  }
+
+  const latest = await prisma.aiPrompt.findFirst({ orderBy: { version: "desc" } });
+  const prompt = await prisma.$transaction(async (tx) => {
+    await tx.aiPrompt.updateMany({ where: { isActive: true }, data: { isActive: false } });
+    return tx.aiPrompt.create({
+      data: {
+        name: input.data.name,
+        promptText: input.data.promptText,
+        version: (latest?.version ?? 0) + 1,
+        isActive: true,
+        editedById: req.user!.id
+      }
+    });
+  });
+
+  await writeAudit(req.user?.id, "PROMPT_CHANGE", "AiPrompt", prompt.id, { version: prompt.version, name: prompt.name });
+  res.status(201).json(prompt);
+});
+
+if (process.env.NODE_ENV === "production") {
+  const clientDist = path.resolve(process.cwd(), "dist");
+  app.use(express.static(clientDist));
+  app.get(/^(?!\/api).*/, (_req, res) => {
+    res.sendFile(path.join(clientDist, "index.html"));
+  });
+}
+
+app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error(err);
+  res.status(500).json({ error: "Unexpected server error" });
+});
+
+app.listen(port, () => {
+  console.log(`API listening on http://localhost:${port}`);
+});

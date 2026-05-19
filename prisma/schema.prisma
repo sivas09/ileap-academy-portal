@@ -1,0 +1,272 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Local development uses SQLite. The models avoid SQLite-only features so the
+// same schema can move to PostgreSQL by changing provider and DATABASE_URL.
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STUDENT
+  TEACHER
+  ADMIN
+}
+
+enum AccountStatus {
+  ACTIVE
+  DISABLED
+  PENDING_APPROVAL
+}
+
+enum ResourceType {
+  DOCUMENT
+  PDF
+  WORKSHEET
+  VIDEO_LINK
+  BOOK
+}
+
+enum AccessMode {
+  FREE
+  LEVEL_ASSIGNED
+  INDIVIDUAL_PURCHASE
+  BUNDLE_PURCHASE
+}
+
+enum ProductType {
+  INDIVIDUAL
+  BUNDLE
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum EntitlementSource {
+  LEVEL
+  PURCHASE
+  MANUAL
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  ACCESS_CHANGE
+  PROMPT_CHANGE
+  PAYMENT_EVENT
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+  role         Role          @default(STUDENT)
+  status       AccountStatus @default(ACTIVE)
+  student      StudentProfile?
+  teacher      TeacherProfile?
+  submissions  WritingSubmission[] @relation("StudentSubmissions")
+  promptEdits  AiPrompt[]     @relation("PromptEditor")
+  entitlements Entitlement[]
+  orders       Order[]
+  auditLogs    AuditLog[]     @relation("ActorAuditLogs")
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model StudentProfile {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  levelId   String
+  level     Level    @relation(fields: [levelId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model TeacherProfile {
+  id        String         @id @default(cuid())
+  userId    String         @unique
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  levels    TeacherLevel[]
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+}
+
+model TeacherLevel {
+  teacherId String
+  levelId   String
+  teacher   TeacherProfile @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  level     Level          @relation(fields: [levelId], references: [id], onDelete: Cascade)
+
+  @@id([teacherId, levelId])
+}
+
+model Level {
+  id          String           @id @default(cuid())
+  code        String           @unique
+  name        String
+  gradeBand   String
+  description String
+  sortOrder   Int
+  students    StudentProfile[]
+  resources   Resource[]
+  assignments Assignment[]
+  teachers    TeacherLevel[]
+  products    Product[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+model Resource {
+  id          String        @id @default(cuid())
+  title       String
+  description String
+  type        ResourceType
+  accessMode  AccessMode
+  url         String?
+  fileKey     String?
+  levelId     String?
+  level       Level?        @relation(fields: [levelId], references: [id], onDelete: SetNull)
+  isPublished Boolean       @default(false)
+  products    ProductResource[]
+  entitlements Entitlement[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model Assignment {
+  id           String              @id @default(cuid())
+  title        String
+  instructions String
+  levelId      String
+  level        Level               @relation(fields: [levelId], references: [id], onDelete: Cascade)
+  isPublished  Boolean             @default(false)
+  dueAt        DateTime?
+  submissions  WritingSubmission[]
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+}
+
+model WritingSubmission {
+  id           String       @id @default(cuid())
+  studentId    String
+  student      User         @relation("StudentSubmissions", fields: [studentId], references: [id], onDelete: Cascade)
+  assignmentId String?
+  assignment   Assignment?  @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  levelId      String?
+  pastedText   String
+  feedback     AiFeedback?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+}
+
+model AiPrompt {
+  id          String       @id @default(cuid())
+  name        String
+  promptText  String
+  version     Int
+  isActive    Boolean      @default(false)
+  editedById  String?
+  editedBy    User?        @relation("PromptEditor", fields: [editedById], references: [id], onDelete: SetNull)
+  feedback    AiFeedback[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model AiFeedback {
+  id           String            @id @default(cuid())
+  submissionId String            @unique
+  submission   WritingSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  promptId     String?
+  prompt       AiPrompt?         @relation(fields: [promptId], references: [id], onDelete: SetNull)
+  feedbackJson String
+  model        String?
+  error        String?
+  createdAt    DateTime          @default(now())
+}
+
+model Product {
+  id              String            @id @default(cuid())
+  title           String
+  description     String
+  type            ProductType
+  priceCents      Int
+  currency        String            @default("usd")
+  levelId         String?
+  level           Level?            @relation(fields: [levelId], references: [id], onDelete: SetNull)
+  stripeProductId String?
+  stripePriceId   String?
+  isActive        Boolean           @default(true)
+  resources       ProductResource[]
+  orderItems      OrderItem[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+}
+
+model ProductResource {
+  productId  String
+  resourceId String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  resource   Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@id([productId, resourceId])
+}
+
+model Order {
+  id                    String      @id @default(cuid())
+  userId                String
+  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status                OrderStatus @default(PENDING)
+  totalCents            Int
+  currency              String      @default("usd")
+  stripeCheckoutSession String?
+  stripePaymentIntent   String?
+  items                 OrderItem[]
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+}
+
+model OrderItem {
+  id                 String  @id @default(cuid())
+  orderId            String
+  order              Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId          String
+  product            Product @relation(fields: [productId], references: [id])
+  titleSnapshot      String
+  priceCentsSnapshot Int
+}
+
+model Entitlement {
+  id         String            @id @default(cuid())
+  userId     String
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resourceId String
+  resource   Resource          @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  source     EntitlementSource
+  isActive   Boolean           @default(true)
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  @@unique([userId, resourceId, source])
+}
+
+model AuditLog {
+  id         String      @id @default(cuid())
+  actorId    String?
+  actor      User?       @relation("ActorAuditLogs", fields: [actorId], references: [id], onDelete: SetNull)
+  action     AuditAction
+  entityType String
+  entityId   String?
+  metadata   String?
+  createdAt  DateTime    @default(now())
+}

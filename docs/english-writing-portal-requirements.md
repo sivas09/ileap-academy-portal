@@ -1,0 +1,465 @@
+# iLEAP Academy English Writing Program Portal Requirements
+
+Version: 1.0  
+Date: May 19, 2026  
+Scope: MVP requirements for the English Writing Program only
+
+## 1. Purpose
+
+The iLEAP Academy portal will redesign the public iLEAP Academy web experience and add a student learning portal for the English Writing Program. The portal must support marketing, student login, level-based learning resources, writing assignment access, AI tutor feedback, and one-time purchases for books and documents.
+
+## 2. Background And Branding
+
+The redesign should use the existing iLEAP Academy logo and brand guide in this workspace. The current brand direction is professional, positive, friendly, modern, clean, and student-focused. The document assumes the following brand tokens:
+
+- Background: brand-specific white / light pink, `#ffeefb`
+- Primary colors: red `#C62828`, blue `#00296b`, green `#008000`, orange `#e6690a`, light blue `#0089ca`
+- Typography: large, readable fonts with bold headline treatment
+- Tone: clear, simple, inspiring, parent- and student-friendly
+
+Reference websites reviewed:
+
+- `ileapacademy.com`: current public program and shop structure
+- `theileap.com/shop/`: sample product/shop flow
+- `theileap.com/cart/`: sample cart/payment flow
+
+## 3. MVP Product Decisions
+
+The following decisions should guide the first build so the portal stays simple and practical.
+
+- Student signup: public student signup is allowed, and students select their writing level during signup or first purchase.
+- Level changes: admins can manually change a student's level after account creation.
+- Parent accounts: not included in MVP.
+- Teacher role: teachers can manage assignments/resources and view student submissions, but cannot manage payments, products, global settings, or users outside their assigned program.
+- Admin role: admins manage users, teachers, levels, resources, assignments, products, payments, AI tutor prompt settings, and public website content related to the English Writing Program.
+- Website CMS scope: MVP admin content editing is limited to English Writing Program content, resources, assignments, products, and AI tutor settings. A full website CMS is out of scope for MVP.
+- AI tutor: the final iLEAP Academy prompt will be supplied later, but the system must support prompt updates from the admin dashboard without code changes.
+- Payments: MVP supports one-time Stripe purchases only.
+- Resource access: resources may be free, assigned by level, unlocked by individual purchase, or unlocked by bundle purchase.
+
+## 4. Scope
+
+### In Scope
+
+- Public marketing website for the English Writing Program
+- Student learning portal for English Writing Program resources
+- Three writing levels: Grade 2/3, Grade 4/5/6, and Grade 7/8/9
+- Student login and dashboard
+- Admin/teacher upload of assignments and learning documents
+- AI tutor submission workflow where students paste writing into the portal
+- AI tutor feedback generated using a prompt supplied by iLEAP Academy
+- Product catalog for books/documents
+- Cart and one-time Stripe checkout
+- Admin dashboard for English Writing Program content, users, products, payments, and AI tutor settings
+
+### Out Of Scope For MVP
+
+- Parent role and parent dashboard
+- Subscriptions or recurring billing
+- Student file upload for writing submissions
+- Multi-program portal beyond English Writing Program
+- Live Zoom classroom management
+- Native LMS-gradebook replacement unless added later
+- Full custom CMS for the entire public website
+- Teacher management of payments or Stripe settings
+
+## 5. Users And Roles
+
+### Student
+
+Students log in, access their selected level, view documents, watch linked videos, open worksheets, purchase resources, paste writing into the AI tutor, and view AI feedback.
+
+### Teacher
+
+Teachers can upload assignments, documents, worksheets, and YouTube links for the English Writing Program. Teachers can view student writing submissions and AI feedback for students in their assigned program/level. Teachers cannot manage Stripe, orders, products, admin users, or global system settings.
+
+### Admin
+
+Admins manage students, teachers, levels, documents, assignments, products, payments, AI tutor prompt settings, and website content.
+
+## 6. Role Permission Matrix
+
+| Capability | Student | Teacher | Admin |
+|---|---:|---:|---:|
+| View public website | Yes | Yes | Yes |
+| Login to portal | Yes | Yes | Yes |
+| Select writing level during signup | Yes | No | No |
+| View assigned level resources | Yes | Yes | Yes |
+| Purchase books/documents | Yes | No | Yes |
+| Submit writing to AI tutor | Yes | No | Yes, for testing |
+| View own AI feedback | Yes | No | Yes |
+| View student submissions | No | Yes, assigned students/program | Yes |
+| Upload assignments/resources | No | Yes | Yes |
+| Manage products/prices | No | No | Yes |
+| Manage users and levels | No | No | Yes |
+| Manage AI tutor prompt | No | No | Yes |
+| View orders/payments | No | No | Yes |
+
+## 7. Program Levels
+
+### Grade 2/3: Story Builder
+
+Focus areas include complete sentences, paragraph foundations, creative story writing, fun prompts, and early EQAO-style English preparation.
+
+### Grade 4/5/6: Paragraph Builder
+
+Focus areas include paragraph structure, topic sentences, supporting details, five-paragraph essay foundations, peer review, and EQAO English preparation.
+
+### Grade 7/8/9: Essay Mastery
+
+Focus areas include persuasive and analytical essays, thesis development, counter-arguments, research essay writing, OSSLT-style timed writing, and structured improvement through feedback.
+
+## 8. Key User Journeys
+
+### Student Registration And Level Selection
+
+Students create an account, select one of the three English Writing Program levels, and land on their level dashboard. Admins can override the student's level later.
+
+### Student Dashboard
+
+After login, students land on a dashboard showing their level, available documents, worksheets, assignments, videos, purchased resources, and AI tutor entry point.
+
+### Assignment And AI Tutor Workflow
+
+Teachers/admins upload an assignment or writing prompt. Students open the assignment, paste their writing into the portal, submit it to the AI tutor, and receive improvement feedback based on iLEAP Academy's supplied AI tutor prompt.
+
+### Purchase Workflow
+
+Students browse books and documents, add products to cart, complete one-time Stripe payment, and receive access to purchased downloadable or portal-viewable resources.
+
+## 9. Functional Requirements
+
+### Public Website
+
+FR-01: The website shall present the English Writing Program as both a marketing offer and a portal entry point.
+
+FR-02: The website shall include pages or sections for program overview, three levels, benefits, pricing/products, shop, login, and contact/trial call-to-action.
+
+FR-03: The English Writing Program page shall clearly show Grade 2/3, Grade 4/5/6, and Grade 7/8/9 options.
+
+FR-04: The website shall use iLEAP Academy logo, colors, typography direction, and tone from the branding guide.
+
+FR-05: The website shall link public visitors to login, shop, and program enrollment actions.
+
+### Authentication And Access
+
+FR-06: The portal shall support secure login for students, teachers, and admins.
+
+FR-07: The portal shall restrict each student to the level, assignments, documents, and purchased resources they are permitted to access.
+
+FR-08: Admins shall be able to create, edit, disable, and assign user accounts.
+
+FR-09: Teachers shall have role-limited access to assignment and content management.
+
+FR-10: Students shall be able to select Grade 2/3, Grade 4/5/6, or Grade 7/8/9 during signup or first purchase.
+
+FR-11: Admins shall be able to change a student's level after account creation.
+
+### Student Dashboard
+
+FR-12: The student dashboard shall show the student's level, learning documents, worksheets, YouTube lesson links, assignments, purchased books/documents, and AI tutor button.
+
+FR-13: The dashboard shall prioritize simple navigation and avoid complex parent/family account flows in the MVP.
+
+FR-14: The dashboard shall show locked or purchasable resources separately from resources already available to the student.
+
+### Content And Assignment Management
+
+FR-15: Admins and teachers shall be able to upload or create assignments for one or more levels.
+
+FR-16: Admins and teachers shall be able to upload documents, PDFs, worksheets, and YouTube video links.
+
+FR-17: Uploaded resources shall include metadata such as title, level, type, visibility, price/access rule, and publish status.
+
+FR-18: Admins shall be able to migrate existing English Writing Program books and documents into the portal.
+
+FR-19: Content shall be filterable by level and content type.
+
+FR-20: Resources shall support four access modes: free, assigned by level, unlocked by individual purchase, and unlocked by bundle purchase.
+
+### AI Tutor
+
+FR-21: Students shall paste writing directly into the portal for AI tutor review.
+
+FR-22: The AI tutor shall generate feedback using an iLEAP Academy-provided prompt.
+
+FR-23: The system shall store student submissions and AI feedback for later review.
+
+FR-24: Teachers/admins shall be able to view student submissions and AI feedback where authorized.
+
+FR-25: The AI tutor workflow shall support future prompt updates without code changes.
+
+FR-26: The system shall clearly communicate that AI feedback is for learning improvement and may be reviewed by iLEAP Academy staff.
+
+FR-27: The AI tutor feedback screen shall support a structured feedback format with sections for strengths, grammar corrections, structure feedback, vocabulary suggestions, improvement priorities, and an optional revised sample.
+
+FR-28: The AI tutor shall store the prompt version used for each feedback response.
+
+FR-29: The AI tutor shall show a clear error message if AI feedback cannot be generated and shall not lose the student's pasted writing.
+
+### Shop, Cart, And Payments
+
+FR-30: The portal shall include a product catalog for books and documents similar in concept to `theileap.com/shop/`.
+
+FR-31: Students shall be able to purchase books and documents individually or in level-based bundles.
+
+FR-32: The cart flow shall support one-time purchases only in the MVP.
+
+FR-33: Stripe shall be integrated for secure checkout.
+
+FR-34: After successful payment, the student's account shall automatically receive access to purchased resources.
+
+FR-35: The system shall record payment status, order details, purchased items, and access entitlements.
+
+FR-36: Admins shall be able to view orders and payment status.
+
+FR-37: Stripe card data shall be handled by Stripe-hosted checkout or Stripe Elements and shall not be stored by the portal.
+
+FR-38: Admins shall be able to mark products as active/inactive without deleting historical orders.
+
+### Admin Dashboard
+
+FR-39: Admins shall manage students, teachers, levels, documents, assignments, products, payments, AI prompts, and English Writing Program website content.
+
+FR-40: Admins shall be able to adjust a student's level.
+
+FR-41: Admins shall be able to publish/unpublish resources.
+
+FR-42: Admins shall be able to create products from uploaded books/documents and set one-time prices.
+
+FR-43: Admins shall be able to review AI tutor usage and student submission history.
+
+FR-44: Admins shall be able to update the active AI tutor prompt and maintain prompt version history.
+
+FR-45: Admins shall be able to view student entitlements and manually grant or revoke resource access when needed.
+
+## 10. AI Tutor Feedback Structure
+
+The exact AI tutor prompt will be supplied by iLEAP Academy. The portal should support the following default feedback sections so the UI can be designed before the final prompt is ready:
+
+- Overall feedback: short encouraging summary of the student's writing.
+- Strengths: what the student did well.
+- Grammar and mechanics: grammar, punctuation, capitalization, spelling, and sentence-level corrections.
+- Organization and structure: paragraphing, thesis/topic sentence, transitions, sequence, and essay structure.
+- Vocabulary and style: word choice, variety, clarity, tone, and stronger alternatives.
+- Improvement priorities: 2-4 specific next steps the student should focus on.
+- Optional revised example: a short sample rewrite or model sentence/paragraph when helpful.
+- Rubric/score: optional score if the final prompt includes a rubric.
+
+The AI tutor must not simply rewrite the full essay for the student. The expected behavior is coaching and improvement feedback.
+
+## 11. Payment And Resource Access Rules
+
+- Free resources: visible to eligible students without payment.
+- Level-assigned resources: visible only to students in the matching level.
+- Individual paid resources: unlocked after one-time purchase.
+- Bundle paid resources: unlock multiple documents/books for a selected level or product bundle.
+- Purchased resources remain available in the student dashboard after payment succeeds.
+- Failed or incomplete payments do not unlock resources.
+- Refund handling is an admin/manual process unless automated refund support is added later.
+- Historical orders must remain readable even if a product is unpublished.
+
+## 12. Privacy, Consent, And Student Data
+
+The portal stores student accounts, writing submissions, AI feedback, purchase history, and access records. Because students may be minors, the MVP shall include clear privacy and AI usage language.
+
+- The portal shall show a privacy notice explaining what student data is collected and why.
+- The portal shall show an AI tutor notice explaining that student writing may be processed by an AI service to generate feedback.
+- The portal shall explain that AI tutor feedback is educational support and may be reviewed by authorized iLEAP Academy staff.
+- Student submissions shall be visible only to the student, authorized teachers, and admins.
+- Admins shall be able to delete or deactivate student accounts.
+- Admins shall be able to remove student submissions if required by policy.
+- Data retention policy must be confirmed before production launch.
+
+## 13. Non-Functional Requirements
+
+NFR-01: The portal shall be responsive and usable on desktop, tablet, and mobile browsers.
+
+NFR-02: The interface shall be simple enough for Grade 2/3 students to navigate with minimal help.
+
+NFR-03: The design shall follow iLEAP Academy branding and remain clean, modern, and uncluttered.
+
+NFR-04: Authentication, authorization, and payment flows shall follow secure implementation practices.
+
+NFR-05: Student writing submissions and AI feedback shall be stored securely and protected from unauthorized access.
+
+NFR-06: Stripe card data shall not be stored on iLEAP Academy servers.
+
+NFR-07: The system shall support auditability for payments, purchases, and student access changes.
+
+NFR-08: Common dashboard pages should load quickly for typical student use, targeting under 2 seconds after authentication under normal load.
+
+NFR-09: The portal shall be maintainable by non-developer admin users for routine content, assignment, and product changes.
+
+NFR-10: The AI tutor prompt shall be configurable by admin without redeploying the application.
+
+NFR-11: The system shall gracefully handle AI service errors and payment failures with clear messages.
+
+NFR-12: The site shall be designed with accessibility fundamentals, including readable contrast, keyboard navigation, alt text for meaningful images, and clear form labels.
+
+NFR-13: The portal shall include privacy notices and AI usage disclaimers appropriate for student users.
+
+NFR-14: Payment processing shall use Stripe's secure payment flow and webhook verification.
+
+NFR-15: Admin actions that affect student access, products, payments, and AI prompts shall be auditable.
+
+NFR-16: The student writing submission form shall protect against accidental data loss during AI tutor errors.
+
+NFR-17: The system shall be structured so the English Writing Program can be expanded later without rebuilding authentication, payments, or resource access.
+
+## 14. Content Model
+
+### Core Entities
+
+- User: student, teacher, admin
+- Student profile: name, email/login, level, status
+- Level: Grade 2/3, Grade 4/5/6, Grade 7/8/9
+- Resource: document, PDF, worksheet, YouTube link, book
+- Assignment: prompt, instructions, level, due date/status if needed
+- Writing submission: student, assignment, pasted text, timestamp
+- AI feedback: submission, prompt version, feedback text, timestamp
+- Product: title, description, price, resource entitlement
+- Order: student, Stripe payment status, product list, total
+- Entitlement: student access to purchased or assigned resources
+- AI prompt: prompt name, prompt text, active status, version, created/updated by
+- Audit log: user, action, entity type, entity id, timestamp, metadata
+
+## 15. Recommended Database Tables
+
+- `users`: login identity, role, status, timestamps
+- `student_profiles`: user id, selected level, display name, status
+- `teacher_profiles`: user id, assigned levels/programs
+- `levels`: Grade 2/3, Grade 4/5/6, Grade 7/8/9
+- `resources`: title, type, URL/file path, level, access mode, publish status
+- `assignments`: title, prompt/instructions, level, publish status, due date if needed
+- `writing_submissions`: student id, assignment id, pasted text, timestamps
+- `ai_feedback`: submission id, prompt version id, feedback text/JSON, timestamps
+- `ai_prompts`: prompt text, version, active flag, admin owner
+- `products`: title, description, price, Stripe price/product ids, active flag
+- `product_resources`: products mapped to unlocked resources
+- `orders`: user id, Stripe checkout/payment ids, total, status
+- `order_items`: order id, product id, price snapshot
+- `entitlements`: user id, resource id/product id, source, active status
+- `audit_logs`: admin/teacher action history
+
+## 16. MVP User Stories
+
+### Student Stories
+
+- As a student, I can create an account and select my writing level.
+- As a student, I can log in and see a dashboard for my level.
+- As a student, I can open documents, worksheets, videos, and assignments assigned to my level.
+- As a student, I can see which resources are locked and available for purchase.
+- As a student, I can purchase books/documents through Stripe checkout.
+- As a student, I can paste writing into the AI tutor and receive structured feedback.
+- As a student, I can return later and view my previous AI tutor feedback.
+
+### Teacher Stories
+
+- As a teacher, I can upload assignments and resources for specific levels.
+- As a teacher, I can publish or unpublish my assignments/resources.
+- As a teacher, I can view student submissions and AI feedback for assigned levels.
+
+### Admin Stories
+
+- As an admin, I can manage student and teacher accounts.
+- As an admin, I can change a student's writing level.
+- As an admin, I can upload and manage resources, books, documents, worksheets, and YouTube links.
+- As an admin, I can create paid products and bundles.
+- As an admin, I can view Stripe order status and student entitlements.
+- As an admin, I can update the AI tutor prompt and see prompt versions.
+- As an admin, I can review audit history for important system changes.
+
+## 17. Recommended Screens And Wireframes
+
+The first design pass should cover these screens before development starts:
+
+- Public English Writing Program page
+- Program level comparison section
+- Shop/product listing page
+- Product detail page
+- Cart/checkout handoff page
+- Student signup and level selection
+- Student login
+- Student dashboard
+- Resource/document detail page
+- Assignment detail page
+- AI tutor submission page
+- AI feedback result/history page
+- Teacher assignment/resource manager
+- Teacher student submissions view
+- Admin user manager
+- Admin resource manager
+- Admin product/payment manager
+- Admin AI tutor prompt settings
+
+## 18. Build Plan
+
+### Phase 1: Foundation
+
+- Public English Writing Program page
+- Authentication for student, teacher, and admin
+- Student level selection
+- Student dashboard shell
+- Basic admin user management
+
+### Phase 2: Resources And Assignments
+
+- Resource upload/management
+- PDF/document/worksheet/YouTube link support
+- Assignment creation and publishing
+- Level-based access rules
+- Teacher dashboard
+
+### Phase 3: AI Tutor
+
+- Student paste-and-submit workflow
+- Configurable AI tutor prompt
+- Structured feedback display
+- Submission and feedback history
+- Teacher/admin review of submissions
+
+### Phase 4: Shop And Stripe
+
+- Product catalog
+- Individual and bundle products
+- Cart/checkout flow
+- Stripe checkout and webhook handling
+- Entitlement unlock after successful payment
+- Admin order/payment view
+
+### Phase 5: Production Readiness
+
+- Privacy and AI usage notices
+- Accessibility pass
+- Error handling and empty states
+- Audit logs
+- Content migration
+- Production deployment checklist
+
+## 19. MVP Acceptance Criteria
+
+- A visitor can understand the English Writing Program and see the three levels.
+- A student can log in and land on a dashboard showing level-specific documents and assignments.
+- An admin/teacher can upload documents, PDFs, worksheets, YouTube links, and assignments.
+- A student can paste writing into the AI tutor and receive feedback.
+- Admin can configure or update the AI tutor prompt.
+- A student can purchase a book/document through one-time Stripe checkout.
+- After payment, the purchased resource appears in the student's dashboard.
+- Admin can manage users, levels, resources, assignments, products, payments, and AI tutor settings.
+- The MVP does not require parent accounts or subscriptions.
+- Student signup includes level selection.
+- Admin can change a student's level.
+- AI tutor feedback appears in a structured, student-friendly format.
+- Stripe payment success creates resource entitlements automatically.
+- Privacy and AI tutor notices are visible before production launch.
+
+## 20. Open Items
+
+- Provide final AI tutor prompt and expected feedback format.
+- Provide the existing English Writing Program books/documents for migration.
+- Confirm exact Stripe account, product tax requirements, refund policy, and receipt/invoice wording.
+- Confirm privacy, consent, and data retention requirements for student writing submissions.
+- Confirm whether public self-registration should stay open or require admin approval after signup.
+- Confirm whether resources are downloadable, view-only, or both.
+- Confirm the exact product list, bundle names, and prices.
