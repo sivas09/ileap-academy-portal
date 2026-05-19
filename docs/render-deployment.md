@@ -39,6 +39,8 @@ Render generates `JWT_SECRET` automatically.
    - `ileap-english-portal`
    - `ileap-english-portal-db`
    - persistent disk mounted at `/opt/render/project/src/uploads`
+   - PostgreSQL plan `free` for trial deployment
+6. The build command uses `npm ci --include=dev` because TypeScript, Vite, and `@types/*` packages are required during the Render build.
 6. Add the secret environment variables.
 7. Deploy.
 
@@ -104,3 +106,4 @@ https://english.ileapacademy.com
 - Local development can continue using SQLite.
 - Uploaded files are stored on the Render persistent disk for now.
 - For larger scale later, replace local disk storage with S3, Cloudflare R2, or Supabase Storage.
+- The free Render PostgreSQL plan is suitable for testing only. Upgrade before storing real student/payment data.
