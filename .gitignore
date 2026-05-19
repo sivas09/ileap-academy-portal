@@ -5,3 +5,4 @@ uploads
 .env
 *.tsbuildinfo
 tmp_*
+prisma/*.db
