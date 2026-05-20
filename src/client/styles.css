@@ -415,6 +415,24 @@ textarea {
   background: #fff9fe;
 }
 
+.assignmentCard {
+  align-content: start;
+}
+
+.homeworkBox {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.homeworkBox label {
+  display: grid;
+  gap: 6px;
+  color: var(--brand-blue);
+  font-weight: 800;
+}
+
 .cardIcon {
   width: 42px;
   height: 42px;

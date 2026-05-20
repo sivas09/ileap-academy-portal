@@ -262,7 +262,7 @@ function Portal({ session, view }: { session: Session; view: string }) {
   if (!data) return <div className="empty">Loading portal data...</div>;
 
   if (view === "resources") return <Resources resources={data.resources} token={session.token} />;
-  if (view === "assignments") return <Assignments assignments={data.assignments} />;
+  if (view === "assignments") return <Assignments assignments={data.assignments} token={session.token} isStudent={session.user.role === "STUDENT"} onSubmit={refresh} />;
   if (view === "tutor" && session.user.role !== "STUDENT") return <AiTutor token={session.token} assignments={data.assignments} onSubmit={refresh} />;
   if (view === "feedback" && session.user.role === "STUDENT") return <StudentFeedback submissions={data.submissions} />;
   if (view === "shop") return <Shop products={data.products} />;
@@ -365,19 +365,84 @@ function iconForResource(resource: Resource) {
   return <FileText size={20} />;
 }
 
-function Assignments({ assignments }: { assignments: Assignment[] }) {
+function Assignments({
+  assignments,
+  token,
+  isStudent,
+  onSubmit
+}: {
+  assignments: Assignment[];
+  token: string;
+  isStudent: boolean;
+  onSubmit: () => void;
+}) {
+  const [openId, setOpenId] = useState("");
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  async function submitHomework(assignment: Assignment) {
+    setMessage("");
+    setError("");
+    try {
+      await api(
+        "/student/homework",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            assignmentId: assignment.id,
+            pastedText: drafts[assignment.id] ?? ""
+          })
+        },
+        token
+      );
+      setDrafts((current) => ({ ...current, [assignment.id]: "" }));
+      setOpenId("");
+      setMessage("Homework submitted. Your teacher can now review it and generate AI feedback.");
+      onSubmit();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not submit homework");
+    }
+  }
+
   return (
-    <div className="cardGrid">
-      {assignments.map((assignment) => (
-        <article className="resourceCard" key={assignment.id}>
-          <div className="cardIcon"><ClipboardEdit size={20} /></div>
-          <strong>{assignment.title}</strong>
-          <span>{assignment.level.gradeBand}</span>
-          <p>{assignment.instructions}</p>
-          {assignment._count && <small>{assignment._count.submissions} submissions</small>}
-        </article>
-      ))}
-    </div>
+    <>
+      {message && <p className="success">{message}</p>}
+      {error && <div className="error">{error}</div>}
+      <div className="cardGrid">
+        {assignments.map((assignment) => (
+          <article className="resourceCard assignmentCard" key={assignment.id}>
+            <div className="cardIcon"><ClipboardEdit size={20} /></div>
+            <strong>{assignment.title}</strong>
+            <span>{assignment.level.gradeBand}</span>
+            <p>{assignment.instructions}</p>
+            {assignment._count && <small>{assignment._count.submissions} submissions</small>}
+            {isStudent && (
+              <>
+                <button className="secondary" onClick={() => setOpenId(openId === assignment.id ? "" : assignment.id)}>
+                  {openId === assignment.id ? "Close" : "Submit homework"}
+                </button>
+                {openId === assignment.id && (
+                  <div className="homeworkBox">
+                    <label>
+                      Paste your work
+                      <textarea
+                        value={drafts[assignment.id] ?? ""}
+                        onChange={(event) => setDrafts((current) => ({ ...current, [assignment.id]: event.target.value }))}
+                        placeholder="Paste your paragraph or essay here..."
+                      />
+                    </label>
+                    <button className="primary" onClick={() => submitHomework(assignment)} disabled={(drafts[assignment.id] ?? "").length < 20}>
+                      <Save size={18} /> Submit
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </article>
+        ))}
+      </div>
+    </>
   );
 }
 
