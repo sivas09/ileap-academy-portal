@@ -262,11 +262,11 @@ function Portal({ session, view }: { session: Session; view: string }) {
   if (!data) return <div className="empty">Loading portal data...</div>;
 
   if (view === "resources") return <Resources resources={data.resources} token={session.token} />;
-  if (view === "assignments") return <Assignments assignments={data.assignments} token={session.token} isStudent={session.user.role === "STUDENT"} onSubmit={refresh} />;
+  if (view === "assignments") return <Assignments assignments={data.assignments} levels={data.levels} token={session.token} role={session.user.role} onSubmit={refresh} />;
   if (view === "tutor" && session.user.role !== "STUDENT") return <AiTutor token={session.token} assignments={data.assignments} onSubmit={refresh} />;
   if (view === "feedback" && session.user.role === "STUDENT") return <StudentFeedback submissions={data.submissions} />;
   if (view === "shop") return <Shop products={data.products} />;
-  if (view === "review" && session.user.role !== "STUDENT") return <ReviewSubmissions levels={data.levels} token={session.token} />;
+  if (view === "review" && session.user.role !== "STUDENT") return <ReviewSubmissions levels={data.levels} assignments={data.assignments} token={session.token} />;
   if (view === "prompts" && session.user.role === "ADMIN") return <PromptManager token={session.token} />;
   if (view === "users" && session.user.role === "ADMIN") return <UserManager levels={data.levels} token={session.token} />;
   if (view === "admin" && session.user.role !== "STUDENT") return <AdminTools data={data} token={session.token} onChange={refresh} />;
@@ -367,19 +367,24 @@ function iconForResource(resource: Resource) {
 
 function Assignments({
   assignments,
+  levels,
   token,
-  isStudent,
+  role,
   onSubmit
 }: {
   assignments: Assignment[];
+  levels: Level[];
   token: string;
-  isStudent: boolean;
+  role: Session["user"]["role"];
   onSubmit: () => void;
 }) {
   const [openId, setOpenId] = useState("");
+  const [editId, setEditId] = useState("");
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [editDrafts, setEditDrafts] = useState<Record<string, { title: string; instructions: string; levelId: string; isPublished: boolean }>>({});
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const isStudent = role === "STUDENT";
 
   async function submitHomework(assignment: Assignment) {
     setMessage("");
@@ -405,6 +410,34 @@ function Assignments({
     }
   }
 
+  async function saveAssignment(assignment: Assignment) {
+    const draft = editDrafts[assignment.id];
+    if (!draft) return;
+    setMessage("");
+    setError("");
+    try {
+      await api(`/admin/assignments/${assignment.id}`, { method: "PUT", body: JSON.stringify(draft) }, token);
+      setEditId("");
+      setMessage("Assignment updated.");
+      onSubmit();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update assignment");
+    }
+  }
+
+  function openEdit(assignment: Assignment) {
+    setEditId(editId === assignment.id ? "" : assignment.id);
+    setEditDrafts((current) => ({
+      ...current,
+      [assignment.id]: current[assignment.id] ?? {
+        title: assignment.title,
+        instructions: assignment.instructions,
+        levelId: assignment.level.id,
+        isPublished: assignment.isPublished
+      }
+    }));
+  }
+
   return (
     <>
       {message && <p className="success">{message}</p>}
@@ -417,6 +450,36 @@ function Assignments({
             <span>{assignment.level.gradeBand}</span>
             <p>{assignment.instructions}</p>
             {assignment._count && <small>{assignment._count.submissions} submissions</small>}
+            {!isStudent && (
+              <>
+                <button className="secondary" onClick={() => openEdit(assignment)}>
+                  {editId === assignment.id ? "Close editor" : "Edit assignment"}
+                </button>
+                {editId === assignment.id && editDrafts[assignment.id] && (
+                  <div className="homeworkBox">
+                    <label>
+                      Title
+                      <input value={editDrafts[assignment.id].title} onChange={(event) => setEditDrafts((current) => ({ ...current, [assignment.id]: { ...current[assignment.id], title: event.target.value } }))} />
+                    </label>
+                    <label>
+                      Details
+                      <textarea value={editDrafts[assignment.id].instructions} onChange={(event) => setEditDrafts((current) => ({ ...current, [assignment.id]: { ...current[assignment.id], instructions: event.target.value } }))} />
+                    </label>
+                    <label>
+                      Level
+                      <select value={editDrafts[assignment.id].levelId} onChange={(event) => setEditDrafts((current) => ({ ...current, [assignment.id]: { ...current[assignment.id], levelId: event.target.value } }))}>
+                        {levels.map((level) => <option key={level.id} value={level.id}>{level.gradeBand}</option>)}
+                      </select>
+                    </label>
+                    <label className="inlineCheck">
+                      <input type="checkbox" checked={editDrafts[assignment.id].isPublished} onChange={(event) => setEditDrafts((current) => ({ ...current, [assignment.id]: { ...current[assignment.id], isPublished: event.target.checked } }))} />
+                      Published
+                    </label>
+                    <button className="primary" onClick={() => saveAssignment(assignment)}><Save size={18} /> Save assignment</button>
+                  </div>
+                )}
+              </>
+            )}
             {isStudent && (
               <>
                 <button className="secondary" onClick={() => setOpenId(openId === assignment.id ? "" : assignment.id)}>
@@ -623,8 +686,9 @@ function Shop({ products }: { products: DashboardData["products"] }) {
   );
 }
 
-function ReviewSubmissions({ levels, token }: { levels: Level[]; token: string }) {
+function ReviewSubmissions({ levels, assignments, token }: { levels: Level[]; assignments: Assignment[]; token: string }) {
   const [levelId, setLevelId] = useState("");
+  const [assignmentId, setAssignmentId] = useState("");
   const [submissions, setSubmissions] = useState<ReviewSubmission[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [error, setError] = useState("");
@@ -645,7 +709,11 @@ function ReviewSubmissions({ levels, token }: { levels: Level[]; token: string }
     load("");
   }, []);
 
-  const selected = useMemo(() => submissions.find((item) => item.id === selectedId) ?? submissions[0], [submissions, selectedId]);
+  const filteredSubmissions = useMemo(
+    () => assignmentId ? submissions.filter((submission) => submission.assignment?.id === assignmentId) : submissions,
+    [submissions, assignmentId]
+  );
+  const selected = useMemo(() => filteredSubmissions.find((item) => item.id === selectedId) ?? filteredSubmissions[0], [filteredSubmissions, selectedId]);
   const parsedFeedback = useMemo(() => {
     if (!selected?.feedback?.feedbackJson) return null;
     try {
@@ -672,10 +740,19 @@ function ReviewSubmissions({ levels, token }: { levels: Level[]; token: string }
             {levels.map((level) => <option key={level.id} value={level.id}>{level.gradeBand}</option>)}
           </select>
         </label>
+        <label className="filterLabel">
+          Assignment
+          <select value={assignmentId} onChange={(event) => setAssignmentId(event.target.value)}>
+            <option value="">All assignments</option>
+            {assignments
+              .filter((assignment) => !levelId || assignment.level.id === levelId)
+              .map((assignment) => <option key={assignment.id} value={assignment.id}>{assignment.title}</option>)}
+          </select>
+        </label>
         {error && <div className="error">{error}</div>}
-        {submissions.length === 0 && <p className="empty">No submissions yet.</p>}
+        {filteredSubmissions.length === 0 && <p className="empty">No submissions yet.</p>}
         <div className="submissionList">
-          {submissions.map((submission) => (
+          {filteredSubmissions.map((submission) => (
             <button
               className={selected?.id === submission.id ? "submissionItem active" : "submissionItem"}
               key={submission.id}

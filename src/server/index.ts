@@ -560,6 +560,48 @@ app.post("/api/admin/assignments", requireAuth, requireRole("ADMIN", "TEACHER"),
   res.status(201).json(assignment);
 });
 
+app.put("/api/admin/assignments/:id", requireAuth, requireRole("ADMIN", "TEACHER"), async (req, res) => {
+  const input = assignmentSchema.partial().safeParse(req.body);
+  if (!input.success) {
+    res.status(400).json({ error: input.error.flatten() });
+    return;
+  }
+
+  const assignment = await prisma.assignment.findUnique({ where: { id: String(req.params.id) } });
+  if (!assignment) {
+    res.status(404).json({ error: "Assignment not found" });
+    return;
+  }
+
+  if (req.user!.role === "TEACHER") {
+    const teacher = await prisma.teacherProfile.findUnique({
+      where: { userId: req.user!.id },
+      include: { levels: true }
+    });
+    const allowedLevelIds = teacher?.levels.map((item) => item.levelId) ?? [];
+    const targetLevelId = input.data.levelId ?? assignment.levelId;
+    if (!allowedLevelIds.includes(assignment.levelId) || !allowedLevelIds.includes(targetLevelId)) {
+      res.status(403).json({ error: "You cannot edit this assignment level" });
+      return;
+    }
+  }
+
+  const updated = await prisma.assignment.update({
+    where: { id: assignment.id },
+    data: {
+      title: input.data.title,
+      instructions: input.data.instructions,
+      levelId: input.data.levelId,
+      isPublished: input.data.isPublished,
+      dueAt: input.data.dueAt ? new Date(input.data.dueAt) : input.data.dueAt === null ? null : undefined
+    },
+    include: { level: true, _count: { select: { submissions: true } } }
+  });
+
+  await writeAudit(req.user?.id, "UPDATE", "Assignment", updated.id, { title: updated.title });
+  res.json(updated);
+});
+
 app.post("/api/admin/products", requireAuth, requireRole("ADMIN"), async (req, res) => {
   const input = productSchema.safeParse(req.body);
   if (!input.success) {

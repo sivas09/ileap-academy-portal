@@ -433,6 +433,18 @@ textarea {
   font-weight: 800;
 }
 
+.inlineCheck {
+  display: flex !important;
+  grid-template-columns: none !important;
+  align-items: center;
+  gap: 8px;
+}
+
+.inlineCheck input {
+  width: 16px;
+  height: 16px;
+}
+
 .cardIcon {
   width: 42px;
   height: 42px;
