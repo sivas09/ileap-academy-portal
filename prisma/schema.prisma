@@ -151,6 +151,7 @@ model Assignment {
   levelId      String
   level        Level               @relation(fields: [levelId], references: [id], onDelete: Cascade)
   isPublished  Boolean             @default(false)
+  isArchived   Boolean             @default(false)
   dueAt        DateTime?
   submissions  WritingSubmission[]
   createdAt    DateTime            @default(now())

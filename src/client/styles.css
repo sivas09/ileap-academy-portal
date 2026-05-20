@@ -445,6 +445,45 @@ textarea {
   height: 16px;
 }
 
+.buttonRow,
+.statusRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.statusPill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--muted);
+  padding: 0 9px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.activeStatus {
+  border-color: rgba(0, 128, 0, 0.22);
+  background: var(--soft-green);
+  color: var(--brand-green);
+}
+
+.dangerStatus {
+  border-color: rgba(198, 40, 40, 0.22);
+  background: var(--soft-red);
+  color: var(--brand-red);
+}
+
+.dangerButton {
+  border-color: rgba(198, 40, 40, 0.22);
+  background: var(--soft-red);
+  color: var(--brand-red);
+}
+
 .cardIcon {
   width: 42px;
   height: 42px;
@@ -676,6 +715,43 @@ textarea {
   margin-top: 3px;
 }
 
+.adminWide {
+  margin-top: 16px;
+}
+
+.managementList {
+  display: grid;
+  gap: 12px;
+}
+
+.managementRow {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.45fr) minmax(0, 1fr);
+  gap: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 14px;
+}
+
+.managementRow span {
+  display: block;
+  margin: 4px 0 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.managementEditor {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.managementEditor textarea,
+.managementEditor .buttonRow {
+  grid-column: 1 / -1;
+}
+
 .teacherUser {
   background: #f8fcff;
 }
@@ -693,6 +769,8 @@ small {
   .reviewLayout,
   .adminGrid,
   .userManager,
+  .managementRow,
+  .managementEditor,
   .cardGrid {
     grid-template-columns: 1fr;
   }

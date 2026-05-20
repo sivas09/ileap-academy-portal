@@ -124,7 +124,7 @@ function requireRole(...roles: Role[]) {
   };
 }
 
-async function writeAudit(actorId: string | undefined, action: "CREATE" | "UPDATE" | "LOGIN" | "ACCESS_CHANGE" | "PROMPT_CHANGE" | "PAYMENT_EVENT", entityType: string, entityId?: string, metadata?: unknown) {
+async function writeAudit(actorId: string | undefined, action: "CREATE" | "UPDATE" | "DELETE" | "LOGIN" | "ACCESS_CHANGE" | "PROMPT_CHANGE" | "PAYMENT_EVENT", entityType: string, entityId?: string, metadata?: unknown) {
   await prisma.auditLog.create({
     data: {
       actorId,
@@ -257,6 +257,7 @@ const assignmentSchema = z.object({
   instructions: z.string().min(10),
   levelId: z.string().min(1),
   isPublished: z.boolean().default(false),
+  isArchived: z.boolean().default(false),
   dueAt: z.string().optional().nullable()
 });
 
@@ -431,7 +432,7 @@ app.get("/api/dashboard", requireAuth, async (req, res) => {
 
   const assignmentWhere =
     user.role === "STUDENT"
-      ? { isPublished: true, levelId: studentLevelId ?? "" }
+      ? { isPublished: true, isArchived: false, levelId: studentLevelId ?? "" }
       : user.role === "TEACHER"
         ? { levelId: { in: user.teacher?.levels.map((item) => item.levelId) ?? [] } }
         : {};
@@ -523,6 +524,69 @@ app.post("/api/admin/resources/upload", requireAuth, requireRole("ADMIN", "TEACH
   res.status(201).json(resource);
 });
 
+app.put("/api/admin/resources/:id", requireAuth, requireRole("ADMIN", "TEACHER"), async (req, res) => {
+  const input = resourceSchema.partial().safeParse(req.body);
+  if (!input.success) {
+    res.status(400).json({ error: input.error.flatten() });
+    return;
+  }
+
+  const resource = await prisma.resource.findUnique({ where: { id: String(req.params.id) } });
+  if (!resource) {
+    res.status(404).json({ error: "Resource not found" });
+    return;
+  }
+
+  if (req.user!.role === "TEACHER") {
+    const teacher = await prisma.teacherProfile.findUnique({
+      where: { userId: req.user!.id },
+      include: { levels: true }
+    });
+    const allowedLevelIds = teacher?.levels.map((item) => item.levelId) ?? [];
+    const targetLevelId = input.data.levelId ?? resource.levelId;
+    if ((resource.levelId && !allowedLevelIds.includes(resource.levelId)) || (targetLevelId && !allowedLevelIds.includes(targetLevelId))) {
+      res.status(403).json({ error: "You cannot edit this resource level" });
+      return;
+    }
+  }
+
+  const updated = await prisma.resource.update({
+    where: { id: resource.id },
+    data: input.data,
+    include: { level: true }
+  });
+
+  await writeAudit(req.user?.id, "UPDATE", "Resource", updated.id, {
+    title: updated.title,
+    isPublished: updated.isPublished
+  });
+  res.json({ ...updated, isAccessible: true });
+});
+
+app.delete("/api/admin/resources/:id", requireAuth, requireRole("ADMIN"), async (req, res) => {
+  const resource = await prisma.resource.findUnique({
+    where: { id: String(req.params.id) },
+    include: {
+      _count: { select: { products: true, entitlements: true } }
+    }
+  });
+  if (!resource) {
+    res.status(404).json({ error: "Resource not found" });
+    return;
+  }
+
+  if (resource._count.products > 0 || resource._count.entitlements > 0) {
+    res.status(409).json({
+      error: "This resource is linked to products or student access history. Unpublish it instead of deleting it."
+    });
+    return;
+  }
+
+  await prisma.resource.delete({ where: { id: resource.id } });
+  await writeAudit(req.user?.id, "DELETE", "Resource", resource.id, { title: resource.title });
+  res.json({ ok: true });
+});
+
 app.get("/api/resources/:id/open", requireAuth, async (req, res) => {
   const resource = await assertResourceAccess(String(req.params.id), req.user!);
   if (!resource) {
@@ -597,6 +661,7 @@ app.put("/api/admin/assignments/:id", requireAuth, requireRole("ADMIN", "TEACHER
       instructions: input.data.instructions,
       levelId: input.data.levelId,
       isPublished: input.data.isPublished,
+      isArchived: input.data.isArchived,
       dueAt: input.data.dueAt ? new Date(input.data.dueAt) : input.data.dueAt === null ? null : undefined
     },
     include: { level: true, _count: { select: { submissions: true } } }
@@ -604,6 +669,40 @@ app.put("/api/admin/assignments/:id", requireAuth, requireRole("ADMIN", "TEACHER
 
   await writeAudit(req.user?.id, "UPDATE", "Assignment", updated.id, { title: updated.title });
   res.json(updated);
+});
+
+app.delete("/api/admin/assignments/:id", requireAuth, requireRole("ADMIN", "TEACHER"), async (req, res) => {
+  const assignment = await prisma.assignment.findUnique({
+    where: { id: String(req.params.id) },
+    include: { _count: { select: { submissions: true } } }
+  });
+  if (!assignment) {
+    res.status(404).json({ error: "Assignment not found" });
+    return;
+  }
+
+  if (req.user!.role === "TEACHER") {
+    const teacher = await prisma.teacherProfile.findUnique({
+      where: { userId: req.user!.id },
+      include: { levels: true }
+    });
+    const allowedLevelIds = teacher?.levels.map((item) => item.levelId) ?? [];
+    if (!allowedLevelIds.includes(assignment.levelId)) {
+      res.status(403).json({ error: "You cannot delete this assignment level" });
+      return;
+    }
+  }
+
+  if (assignment._count.submissions > 0) {
+    res.status(409).json({
+      error: "This assignment already has student submissions. Archive it instead of deleting it."
+    });
+    return;
+  }
+
+  await prisma.assignment.delete({ where: { id: assignment.id } });
+  await writeAudit(req.user?.id, "DELETE", "Assignment", assignment.id, { title: assignment.title });
+  res.json({ ok: true });
 });
 
 app.post("/api/admin/products", requireAuth, requireRole("ADMIN"), async (req, res) => {

@@ -11,6 +11,7 @@ import {
   Shield,
   ShoppingCart,
   Sparkles,
+  Trash2,
   UserRound,
   Video
 } from "lucide-react";
@@ -381,7 +382,7 @@ function Assignments({
   const [openId, setOpenId] = useState("");
   const [editId, setEditId] = useState("");
   const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [editDrafts, setEditDrafts] = useState<Record<string, { title: string; instructions: string; levelId: string; isPublished: boolean }>>({});
+  const [editDrafts, setEditDrafts] = useState<Record<string, { title: string; instructions: string; levelId: string; isPublished: boolean; isArchived: boolean }>>({});
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const isStudent = role === "STUDENT";
@@ -425,6 +426,19 @@ function Assignments({
     }
   }
 
+  async function deleteAssignment(assignment: Assignment) {
+    if (!window.confirm(`Delete "${assignment.title}"? This only works when there are no student submissions.`)) return;
+    setMessage("");
+    setError("");
+    try {
+      await api(`/admin/assignments/${assignment.id}`, { method: "DELETE" }, token);
+      setMessage("Assignment deleted.");
+      onSubmit();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete assignment");
+    }
+  }
+
   function openEdit(assignment: Assignment) {
     setEditId(editId === assignment.id ? "" : assignment.id);
     setEditDrafts((current) => ({
@@ -433,7 +447,8 @@ function Assignments({
         title: assignment.title,
         instructions: assignment.instructions,
         levelId: assignment.level.id,
-        isPublished: assignment.isPublished
+        isPublished: assignment.isPublished,
+        isArchived: assignment.isArchived
       }
     }));
   }
@@ -448,6 +463,10 @@ function Assignments({
             <div className="cardIcon"><ClipboardEdit size={20} /></div>
             <strong>{assignment.title}</strong>
             <span>{assignment.level.gradeBand}</span>
+            <div className="statusRow">
+              <small className={assignment.isPublished ? "statusPill activeStatus" : "statusPill"}>{assignment.isPublished ? "Published" : "Hidden"}</small>
+              {assignment.isArchived && <small className="statusPill dangerStatus">Archived</small>}
+            </div>
             <p>{assignment.instructions}</p>
             {assignment._count && <small>{assignment._count.submissions} submissions</small>}
             {!isStudent && (
@@ -475,7 +494,14 @@ function Assignments({
                       <input type="checkbox" checked={editDrafts[assignment.id].isPublished} onChange={(event) => setEditDrafts((current) => ({ ...current, [assignment.id]: { ...current[assignment.id], isPublished: event.target.checked } }))} />
                       Published
                     </label>
+                    <label className="inlineCheck">
+                      <input type="checkbox" checked={editDrafts[assignment.id].isArchived} onChange={(event) => setEditDrafts((current) => ({ ...current, [assignment.id]: { ...current[assignment.id], isArchived: event.target.checked, isPublished: event.target.checked ? false : current[assignment.id].isPublished } }))} />
+                      Archived
+                    </label>
                     <button className="primary" onClick={() => saveAssignment(assignment)}><Save size={18} /> Save assignment</button>
+                    <button className="secondary dangerButton" onClick={() => deleteAssignment(assignment)}>
+                      <Trash2 size={18} /> Delete if empty
+                    </button>
                   </div>
                 )}
               </>
@@ -703,6 +729,7 @@ function Shop({ products }: { products: DashboardData["products"] }) {
 function ReviewSubmissions({ levels, assignments, token }: { levels: Level[]; assignments: Assignment[]; token: string }) {
   const [levelId, setLevelId] = useState("");
   const [assignmentId, setAssignmentId] = useState("");
+  const [reviewStatus, setReviewStatus] = useState("");
   const [submissions, setSubmissions] = useState<ReviewSubmission[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [teacherFeedbackDraft, setTeacherFeedbackDraft] = useState("");
@@ -726,8 +753,14 @@ function ReviewSubmissions({ levels, assignments, token }: { levels: Level[]; as
   }, []);
 
   const filteredSubmissions = useMemo(
-    () => assignmentId ? submissions.filter((submission) => submission.assignment?.id === assignmentId) : submissions,
-    [submissions, assignmentId]
+    () => submissions.filter((submission) => {
+      if (assignmentId && submission.assignment?.id !== assignmentId) return false;
+      if (reviewStatus === "needs-ai" && submission.feedback) return false;
+      if (reviewStatus === "needs-teacher" && submission.teacherFeedback) return false;
+      if (reviewStatus === "reviewed" && (!submission.feedback || !submission.teacherFeedback)) return false;
+      return true;
+    }),
+    [submissions, assignmentId, reviewStatus]
   );
   const selected = useMemo(() => filteredSubmissions.find((item) => item.id === selectedId) ?? filteredSubmissions[0], [filteredSubmissions, selectedId]);
   const parsedFeedback = useMemo(() => {
@@ -786,6 +819,15 @@ function ReviewSubmissions({ levels, assignments, token }: { levels: Level[]; as
               .map((assignment) => <option key={assignment.id} value={assignment.id}>{assignment.title}</option>)}
           </select>
         </label>
+        <label className="filterLabel">
+          Review status
+          <select value={reviewStatus} onChange={(event) => setReviewStatus(event.target.value)}>
+            <option value="">All statuses</option>
+            <option value="needs-ai">Needs AI feedback</option>
+            <option value="needs-teacher">Needs teacher feedback</option>
+            <option value="reviewed">Fully reviewed</option>
+          </select>
+        </label>
         {error && <div className="error">{error}</div>}
         {message && <p className="success">{message}</p>}
         {filteredSubmissions.length === 0 && <p className="empty">No submissions yet.</p>}
@@ -799,6 +841,10 @@ function ReviewSubmissions({ levels, assignments, token }: { levels: Level[]; as
               <strong>{submission.student.firstName} {submission.student.lastName}</strong>
               <span>{submission.assignment?.title ?? "Writing practice"}</span>
               <small>{submission.student.student?.level.gradeBand ?? "No level"} | {new Date(submission.createdAt).toLocaleDateString()}</small>
+              <div className="statusRow">
+                <small className={submission.feedback ? "statusPill activeStatus" : "statusPill"}>{submission.feedback ? "AI added" : "Needs AI"}</small>
+                <small className={submission.teacherFeedback ? "statusPill activeStatus" : "statusPill"}>{submission.teacherFeedback ? "Teacher added" : "Needs teacher"}</small>
+              </div>
             </button>
           ))}
         </div>
@@ -1097,6 +1143,16 @@ function UserManager({ levels, token }: { levels: Level[]; token: string }) {
   );
 }
 
+type ResourceDraft = {
+  title: string;
+  description: string;
+  type: Resource["type"];
+  accessMode: Resource["accessMode"];
+  levelId: string;
+  url: string;
+  isPublished: boolean;
+};
+
 function AdminTools({ data, token, onChange }: { data: DashboardData; token: string; onChange: () => void }) {
   const [resource, setResource] = useState({
     title: "",
@@ -1124,61 +1180,78 @@ function AdminTools({ data, token, onChange }: { data: DashboardData; token: str
     resourceIds: [] as string[],
     isActive: true
   });
+  const [resourceDrafts, setResourceDrafts] = useState<Record<string, ResourceDraft>>({});
   const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
 
   async function createResource() {
     setMessage("");
-    if (resourceMode === "file") {
-      if (!file) {
-        setMessage("Choose a file before uploading.");
-        return;
+    setError("");
+    try {
+      if (resourceMode === "file") {
+        if (!file) {
+          setError("Choose a file before uploading.");
+          return;
+        }
+        const form = new FormData();
+        form.append("file", file);
+        Object.entries(resource).forEach(([key, value]) => form.append(key, String(value)));
+        await uploadApi("/admin/resources/upload", form, token);
+        setFile(null);
+      } else {
+        await api("/admin/resources", { method: "POST", body: JSON.stringify(resource) }, token);
       }
-      const form = new FormData();
-      form.append("file", file);
-      Object.entries(resource).forEach(([key, value]) => form.append(key, String(value)));
-      await uploadApi("/admin/resources/upload", form, token);
-      setFile(null);
-    } else {
-      await api("/admin/resources", { method: "POST", body: JSON.stringify(resource) }, token);
+      setResource({ ...resource, title: "", description: "", url: "" });
+      setMessage("Resource saved.");
+      onChange();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save resource");
     }
-    setResource({ ...resource, title: "", description: "", url: "" });
-    setMessage("Resource saved.");
-    onChange();
   }
 
   async function createAssignment() {
     setMessage("");
-    await api("/admin/assignments", { method: "POST", body: JSON.stringify(assignment) }, token);
-    setAssignment({ ...assignment, title: "", instructions: "" });
-    setMessage("Assignment saved.");
-    onChange();
+    setError("");
+    try {
+      await api("/admin/assignments", { method: "POST", body: JSON.stringify(assignment) }, token);
+      setAssignment({ ...assignment, title: "", instructions: "" });
+      setMessage("Assignment saved.");
+      onChange();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save assignment");
+    }
   }
 
   async function createProduct() {
     setMessage("");
+    setError("");
     if (product.resourceIds.length === 0) {
-      setMessage("Select at least one resource for the product.");
+      setError("Select at least one resource for the product.");
       return;
     }
-    await api(
-      "/admin/products",
-      {
-        method: "POST",
-        body: JSON.stringify({
-          title: product.title,
-          description: product.description,
-          type: product.type,
-          priceCents: Math.round(Number(product.priceDollars) * 100),
-          levelId: product.levelId || null,
-          resourceIds: product.resourceIds,
-          isActive: product.isActive
-        })
-      },
-      token
-    );
-    setProduct({ ...product, title: "", description: "", resourceIds: [] });
-    setMessage("Product saved.");
-    onChange();
+    try {
+      await api(
+        "/admin/products",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            title: product.title,
+            description: product.description,
+            type: product.type,
+            priceCents: Math.round(Number(product.priceDollars) * 100),
+            levelId: product.levelId || null,
+            resourceIds: product.resourceIds,
+            isActive: product.isActive
+          })
+        },
+        token
+      );
+      setProduct({ ...product, title: "", description: "", resourceIds: [] });
+      setMessage("Product saved.");
+      onChange();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save product");
+    }
   }
 
   function toggleProductResource(resourceId: string) {
@@ -1190,7 +1263,61 @@ function AdminTools({ data, token, onChange }: { data: DashboardData; token: str
     }));
   }
 
+  function ensureResourceDraft(resource: Resource) {
+    setResourceDrafts((current) => ({
+      ...current,
+      [resource.id]: current[resource.id] ?? {
+        title: resource.title,
+        description: resource.description,
+        type: resource.type,
+        accessMode: resource.accessMode,
+        levelId: resource.level?.id ?? "",
+        url: resource.url ?? "",
+        isPublished: resource.isPublished
+      }
+    }));
+  }
+
+  async function updateResource(resource: Resource, changes?: Partial<ResourceDraft>) {
+    const draft = { ...resourceDrafts[resource.id], ...changes };
+    if (!draft) return;
+    setMessage("");
+    setError("");
+    try {
+      await api(`/admin/resources/${resource.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          title: draft.title,
+          description: draft.description,
+          type: draft.type,
+          accessMode: draft.accessMode,
+          levelId: draft.levelId || null,
+          url: draft.url || null,
+          isPublished: draft.isPublished
+        })
+      }, token);
+      setMessage("Resource updated.");
+      onChange();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update resource");
+    }
+  }
+
+  async function deleteResource(resource: Resource) {
+    if (!window.confirm(`Delete "${resource.title}"? If it has products or student access history, the portal will refuse and you should unpublish it instead.`)) return;
+    setMessage("");
+    setError("");
+    try {
+      await api(`/admin/resources/${resource.id}`, { method: "DELETE" }, token);
+      setMessage("Resource deleted.");
+      onChange();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete resource");
+    }
+  }
+
   return (
+    <>
     <div className="adminGrid">
       <section className="panel">
         <h3>Add Resource</h3>
@@ -1264,7 +1391,68 @@ function AdminTools({ data, token, onChange }: { data: DashboardData; token: str
           <button className="primary" onClick={createProduct}><ShoppingCart size={18} /> Create product</button>
         </div>
       </section>
-      {message && <section className="panel wide"><p className="success">{message}</p></section>}
+      {(message || error) && (
+        <section className="panel wide">
+          {message && <p className="success">{message}</p>}
+          {error && <div className="error">{error}</div>}
+        </section>
+      )}
     </div>
+    <section className="panel adminWide">
+      <h3>Manage Resources</h3>
+      <div className="managementList">
+        {data.resources.map((item) => {
+          const draft = resourceDrafts[item.id];
+          return (
+            <article className="managementRow" key={item.id} onMouseEnter={() => ensureResourceDraft(item)}>
+              <div>
+                <strong>{item.title}</strong>
+                <span>{item.level?.gradeBand ?? "All levels"} | {item.type.replace("_", " ")}</span>
+                <div className="statusRow">
+                  <small className={item.isPublished ? "statusPill activeStatus" : "statusPill"}>{item.isPublished ? "Published" : "Hidden"}</small>
+                  <small className="statusPill">{item.accessMode.replace("_", " ")}</small>
+                </div>
+              </div>
+              {draft ? (
+                <div className="managementEditor">
+                  <input value={draft.title} onChange={(event) => setResourceDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], title: event.target.value } }))} />
+                  <textarea value={draft.description} onChange={(event) => setResourceDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], description: event.target.value } }))} />
+                  <select value={draft.type} onChange={(event) => setResourceDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], type: event.target.value as Resource["type"] } }))}>
+                    <option value="DOCUMENT">Document</option>
+                    <option value="PDF">PDF</option>
+                    <option value="WORKSHEET">Worksheet</option>
+                    <option value="VIDEO_LINK">Video link</option>
+                    <option value="BOOK">Book</option>
+                  </select>
+                  <select value={draft.accessMode} onChange={(event) => setResourceDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], accessMode: event.target.value as Resource["accessMode"] } }))}>
+                    <option value="FREE">Free</option>
+                    <option value="LEVEL_ASSIGNED">Level assigned</option>
+                    <option value="INDIVIDUAL_PURCHASE">Individual purchase</option>
+                    <option value="BUNDLE_PURCHASE">Bundle purchase</option>
+                  </select>
+                  <select value={draft.levelId} onChange={(event) => setResourceDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], levelId: event.target.value } }))}>
+                    <option value="">All levels</option>
+                    {data.levels.map((level) => <option key={level.id} value={level.id}>{level.gradeBand}</option>)}
+                  </select>
+                  <input placeholder="URL, if this is a link resource" value={draft.url} onChange={(event) => setResourceDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], url: event.target.value } }))} />
+                  <label className="inlineCheck">
+                    <input type="checkbox" checked={draft.isPublished} onChange={(event) => setResourceDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], isPublished: event.target.checked } }))} />
+                    Published
+                  </label>
+                  <div className="buttonRow">
+                    <button className="primary" onClick={() => updateResource(item)}><Save size={18} /> Save</button>
+                    <button className="secondary" onClick={() => updateResource(item, { isPublished: false })}>Unpublish</button>
+                    <button className="secondary dangerButton" onClick={() => deleteResource(item)}><Trash2 size={18} /> Delete if unused</button>
+                  </div>
+                </div>
+              ) : (
+                <button className="secondary" onClick={() => ensureResourceDraft(item)}>Edit resource</button>
+              )}
+            </article>
+          );
+        })}
+      </div>
+    </section>
+    </>
   );
 }

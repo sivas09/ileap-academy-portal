@@ -31,6 +31,7 @@ export type Resource = {
   level?: Level | null;
   isPublished: boolean;
   isAccessible: boolean;
+  _count?: { products: number; entitlements: number };
 };
 
 export type Assignment = {
@@ -39,6 +40,7 @@ export type Assignment = {
   instructions: string;
   level: Level;
   isPublished: boolean;
+  isArchived: boolean;
   dueAt?: string | null;
   _count?: { submissions: number };
 };
