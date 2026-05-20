@@ -113,6 +113,29 @@ export type AdminUser = Session["user"] & {
   teacherLevels: Level[];
 };
 
+function formatApiError(error: unknown) {
+  if (typeof error === "string") return error;
+  if (!error || typeof error !== "object") return "Request failed";
+
+  const maybeError = error as {
+    error?: unknown;
+    formErrors?: string[];
+    fieldErrors?: Record<string, string[]>;
+  };
+
+  if (typeof maybeError.error === "string") return maybeError.error;
+
+  const flattened = maybeError.error && typeof maybeError.error === "object"
+    ? maybeError.error as { formErrors?: string[]; fieldErrors?: Record<string, string[]> }
+    : maybeError;
+
+  const fieldMessages = Object.entries(flattened.fieldErrors ?? {})
+    .flatMap(([field, messages]) => messages.map((message) => `${field}: ${message}`));
+  const formMessages = flattened.formErrors ?? [];
+
+  return [...formMessages, ...fieldMessages].join("; ") || "Request failed";
+}
+
 export async function api<T>(path: string, options: RequestInit = {}, token?: string): Promise<T> {
   const response = await fetch(`/api${path}`, {
     ...options,
@@ -125,7 +148,7 @@ export async function api<T>(path: string, options: RequestInit = {}, token?: st
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: "Request failed" }));
-    throw new Error(typeof error.error === "string" ? error.error : "Request failed");
+    throw new Error(formatApiError(error));
   }
 
   return response.json();
@@ -142,7 +165,7 @@ export async function uploadApi<T>(path: string, formData: FormData, token: stri
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: "Request failed" }));
-    throw new Error(typeof error.error === "string" ? error.error : "Request failed");
+    throw new Error(formatApiError(error));
   }
 
   return response.json();
