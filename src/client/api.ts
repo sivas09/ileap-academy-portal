@@ -60,6 +60,9 @@ export type Submission = {
   id: string;
   pastedText: string;
   levelId?: string | null;
+  teacherFeedback?: string | null;
+  teacherFeedbackById?: string | null;
+  teacherFeedbackAt?: string | null;
   createdAt: string;
   assignment?: Assignment | null;
   feedback?: {

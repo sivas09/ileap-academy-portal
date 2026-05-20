@@ -510,7 +510,7 @@ function Assignments({
 }
 
 function StudentFeedback({ submissions }: { submissions: DashboardData["submissions"] }) {
-  const withFeedback = submissions.filter((submission) => submission.feedback);
+  const withFeedback = submissions.filter((submission) => submission.feedback || submission.teacherFeedback);
   return (
     <div className="cardGrid">
       {withFeedback.length === 0 && <section className="panel"><p className="empty">No AI feedback is available yet.</p></section>}
@@ -527,6 +527,13 @@ function StudentFeedback({ submissions }: { submissions: DashboardData["submissi
             <span>{new Date(submission.createdAt).toLocaleDateString()}</span>
             {parsed?.markOutOf10 != null && <div className="price">{parsed.markOutOf10}/10</div>}
             {parsed && <FeedbackView feedback={parsed} />}
+            {submission.teacherFeedback && (
+              <div className="teacherFeedbackBox">
+                <strong>Teacher Feedback</strong>
+                <p>{submission.teacherFeedback}</p>
+                {submission.teacherFeedbackAt && <small>{new Date(submission.teacherFeedbackAt).toLocaleDateString()}</small>}
+              </div>
+            )}
           </article>
         );
       })}
@@ -698,7 +705,9 @@ function ReviewSubmissions({ levels, assignments, token }: { levels: Level[]; as
   const [assignmentId, setAssignmentId] = useState("");
   const [submissions, setSubmissions] = useState<ReviewSubmission[]>([]);
   const [selectedId, setSelectedId] = useState("");
+  const [teacherFeedbackDraft, setTeacherFeedbackDraft] = useState("");
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
 
   async function load(nextLevelId = levelId) {
     setError("");
@@ -730,6 +739,27 @@ function ReviewSubmissions({ levels, assignments, token }: { levels: Level[]; as
     }
   }, [selected]);
 
+  useEffect(() => {
+    setTeacherFeedbackDraft(selected?.teacherFeedback ?? "");
+  }, [selected?.id]);
+
+  async function saveTeacherFeedback() {
+    if (!selected) return;
+    setError("");
+    setMessage("");
+    try {
+      const updated = await api<ReviewSubmission>(
+        `/review/submissions/${selected.id}/teacher-feedback`,
+        { method: "PUT", body: JSON.stringify({ teacherFeedback: teacherFeedbackDraft }) },
+        token
+      );
+      setSubmissions((current) => current.map((item) => item.id === updated.id ? updated : item));
+      setMessage("Teacher feedback saved.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save teacher feedback");
+    }
+  }
+
   return (
     <div className="reviewLayout">
       <section className="panel">
@@ -757,6 +787,7 @@ function ReviewSubmissions({ levels, assignments, token }: { levels: Level[]; as
           </select>
         </label>
         {error && <div className="error">{error}</div>}
+        {message && <p className="success">{message}</p>}
         {filteredSubmissions.length === 0 && <p className="empty">No submissions yet.</p>}
         <div className="submissionList">
           {filteredSubmissions.map((submission) => (
@@ -789,6 +820,14 @@ function ReviewSubmissions({ levels, assignments, token }: { levels: Level[]; as
               <strong>AI Tutor Feedback</strong>
               {parsedFeedback ? <FeedbackView feedback={parsedFeedback} /> : <p className="empty">No feedback available.</p>}
               {selected.feedback?.prompt && <small>Prompt: {selected.feedback.prompt.name} v{selected.feedback.prompt.version}</small>}
+            </div>
+            <div className="writingBox">
+              <strong>Teacher Feedback</strong>
+              <textarea value={teacherFeedbackDraft} onChange={(event) => setTeacherFeedbackDraft(event.target.value)} placeholder="Paste or type teacher feedback for the student..." />
+              <button className="primary" onClick={saveTeacherFeedback} disabled={teacherFeedbackDraft.trim().length === 0}>
+                <Save size={18} /> Save teacher feedback
+              </button>
+              {selected.teacherFeedbackAt && <small>Last saved: {new Date(selected.teacherFeedbackAt).toLocaleString()}</small>}
             </div>
           </>
         )}

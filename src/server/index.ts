@@ -304,6 +304,10 @@ const adminResetPasswordSchema = z.object({
   temporaryPassword: z.string().min(8).default("Member123!")
 });
 
+const teacherFeedbackSchema = z.object({
+  teacherFeedback: z.string().min(1).max(8000)
+});
+
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
 });
@@ -1011,6 +1015,57 @@ app.get("/api/review/submissions", requireAuth, requireRole("ADMIN", "TEACHER"),
   });
 
   res.json(submissions);
+});
+
+app.put("/api/review/submissions/:id/teacher-feedback", requireAuth, requireRole("ADMIN", "TEACHER"), async (req, res) => {
+  const input = teacherFeedbackSchema.safeParse(req.body);
+  if (!input.success) {
+    res.status(400).json({ error: input.error.flatten() });
+    return;
+  }
+
+  const submission = await prisma.writingSubmission.findUnique({ where: { id: String(req.params.id) } });
+  if (!submission) {
+    res.status(404).json({ error: "Submission not found" });
+    return;
+  }
+
+  if (req.user!.role === "TEACHER") {
+    const teacher = await prisma.teacherProfile.findUnique({
+      where: { userId: req.user!.id },
+      include: { levels: true }
+    });
+    const allowedLevelIds = teacher?.levels.map((item) => item.levelId) ?? [];
+    if (!submission.levelId || !allowedLevelIds.includes(submission.levelId)) {
+      res.status(403).json({ error: "You cannot add feedback for this submission" });
+      return;
+    }
+  }
+
+  const updated = await prisma.writingSubmission.update({
+    where: { id: submission.id },
+    data: {
+      teacherFeedback: input.data.teacherFeedback,
+      teacherFeedbackById: req.user!.id,
+      teacherFeedbackAt: new Date()
+    },
+    include: {
+      student: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          student: { include: { level: true } }
+        }
+      },
+      assignment: { include: { level: true } },
+      feedback: { include: { prompt: true } }
+    }
+  });
+
+  await writeAudit(req.user?.id, "UPDATE", "WritingSubmission", submission.id, { teacherFeedback: true });
+  res.json(updated);
 });
 
 app.get("/api/review/students", requireAuth, requireRole("ADMIN", "TEACHER"), async (req, res) => {

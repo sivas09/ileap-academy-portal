@@ -549,6 +549,25 @@ textarea {
   white-space: pre-wrap;
 }
 
+.teacherFeedbackBox {
+  display: grid;
+  gap: 8px;
+  border: 1px solid rgba(0, 128, 0, 0.22);
+  border-radius: 8px;
+  background: var(--soft-green);
+  padding: 12px;
+}
+
+.teacherFeedbackBox strong {
+  color: var(--brand-green);
+}
+
+.teacherFeedbackBox p {
+  margin: 0;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
 .promptHistory {
   display: grid;
   gap: 6px;

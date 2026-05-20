@@ -165,6 +165,9 @@ model WritingSubmission {
   assignment   Assignment?  @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
   levelId      String?
   pastedText   String
+  teacherFeedback String?
+  teacherFeedbackById String?
+  teacherFeedbackAt DateTime?
   feedback     AiFeedback?
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
