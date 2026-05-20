@@ -737,99 +737,104 @@ app.post("/api/student/homework", requireAuth, requireRole("STUDENT"), async (re
 });
 
 app.post("/api/student/submissions", requireAuth, requireRole("TEACHER", "ADMIN"), async (req, res) => {
-  const input = submissionSchema.safeParse(req.body);
-  if (!input.success) {
-    res.status(400).json({ error: input.error.flatten() });
-    return;
-  }
-
-  const targetStudentId = input.data.studentId;
-  if (!targetStudentId) {
-    res.status(400).json({ error: "studentId is required for AI tutor feedback" });
-    return;
-  }
-
-  const targetStudent = await prisma.user.findUnique({
-    where: { id: targetStudentId },
-    include: { student: true }
-  });
-  if (!targetStudent?.student) {
-    res.status(404).json({ error: "Student not found" });
-    return;
-  }
-
-  if (req.user!.role === "TEACHER") {
-    const teacher = await prisma.teacherProfile.findUnique({
-      where: { userId: req.user!.id },
-      include: { levels: true }
-    });
-    const allowedLevelIds = teacher?.levels.map((item) => item.levelId) ?? [];
-    if (!allowedLevelIds.includes(targetStudent.student.levelId)) {
-      res.status(403).json({ error: "You cannot submit AI feedback for this student's level" });
+  try {
+    const input = submissionSchema.safeParse(req.body);
+    if (!input.success) {
+      res.status(400).json({ error: input.error.flatten() });
       return;
     }
-  }
 
-  const activePrompt = await prisma.aiPrompt.findFirst({ where: { isActive: true }, orderBy: { version: "desc" } });
-  const levelId = targetStudent.student.levelId;
-
-  const submission = await prisma.writingSubmission.create({
-    data: {
-      studentId: targetStudent.id,
-      assignmentId: input.data.assignmentId,
-      pastedText: input.data.pastedText,
-      levelId
+    const targetStudentId = input.data.studentId;
+    if (!targetStudentId) {
+      res.status(400).json({ error: "studentId is required for AI tutor feedback" });
+      return;
     }
-  });
 
-  const fallbackFeedback = {
-    markOutOf10: null,
-    content: "AI tutor is not configured yet. Your writing was saved, and this placeholder shows the feedback format.",
-    grammarAndPunctuation: "The live AI tutor will identify grammar and punctuation mistakes and explain why they should be corrected.",
-    academicVocabulary: "The live AI tutor will suggest stronger academic vocabulary where appropriate.",
-    structure: "The live AI tutor will review paragraph and essay structure.",
-    goodTransitionWords: "The live AI tutor will suggest useful transition words.",
-    overall: "Configure OPENAI_API_KEY and the active prompt to generate live feedback."
-  };
+    const targetStudent = await prisma.user.findUnique({
+      where: { id: targetStudentId },
+      include: { student: true }
+    });
+    if (!targetStudent?.student) {
+      res.status(404).json({ error: "Student not found" });
+      return;
+    }
 
-  let feedbackJson = JSON.stringify(fallbackFeedback);
-  let model: string | null = null;
-  let error: string | null = null;
-
-  if (openai && activePrompt) {
-    model = process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
-    try {
-      const completion = await openai.chat.completions.create({
-        model,
-        response_format: { type: "json_object" },
-        messages: [
-          {
-            role: "system",
-            content:
-              activePrompt.promptText +
-              "\nReturn valid JSON only with these exact keys: markOutOf10, content, grammarAndPunctuation, academicVocabulary, structure, goodTransitionWords, overall. markOutOf10 must be a number from 0 to 10. Each feedback section should explain mistakes and why they are mistakes."
-          },
-          { role: "user", content: input.data.pastedText }
-        ]
+    if (req.user!.role === "TEACHER") {
+      const teacher = await prisma.teacherProfile.findUnique({
+        where: { userId: req.user!.id },
+        include: { levels: true }
       });
-      feedbackJson = completion.choices[0]?.message.content ?? feedbackJson;
-    } catch (err) {
-      error = err instanceof Error ? err.message : "AI tutor failed";
+      const allowedLevelIds = teacher?.levels.map((item) => item.levelId) ?? [];
+      if (!allowedLevelIds.includes(targetStudent.student.levelId)) {
+        res.status(403).json({ error: "You cannot submit AI feedback for this student's level" });
+        return;
+      }
     }
+
+    const activePrompt = await prisma.aiPrompt.findFirst({ where: { isActive: true }, orderBy: { version: "desc" } });
+    const levelId = targetStudent.student.levelId;
+
+    const submission = await prisma.writingSubmission.create({
+      data: {
+        studentId: targetStudent.id,
+        assignmentId: input.data.assignmentId || null,
+        pastedText: input.data.pastedText,
+        levelId
+      }
+    });
+
+    const fallbackFeedback = {
+      markOutOf10: null,
+      content: "AI tutor is not configured yet. Your writing was saved, and this placeholder shows the feedback format.",
+      grammarAndPunctuation: "The live AI tutor will identify grammar and punctuation mistakes and explain why they should be corrected.",
+      academicVocabulary: "The live AI tutor will suggest stronger academic vocabulary where appropriate.",
+      structure: "The live AI tutor will review paragraph and essay structure.",
+      goodTransitionWords: "The live AI tutor will suggest useful transition words.",
+      overall: "Configure OPENAI_API_KEY and the active prompt to generate live feedback."
+    };
+
+    let feedbackJson = JSON.stringify(fallbackFeedback);
+    let model: string | null = null;
+    let error: string | null = null;
+
+    if (openai && activePrompt) {
+      model = process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
+      try {
+        const completion = await openai.chat.completions.create({
+          model,
+          response_format: { type: "json_object" },
+          messages: [
+            {
+              role: "system",
+              content:
+                activePrompt.promptText +
+                "\nReturn valid JSON only with these exact keys: markOutOf10, content, grammarAndPunctuation, academicVocabulary, structure, goodTransitionWords, overall. markOutOf10 must be a number from 0 to 10. Each feedback section should explain mistakes and why they are mistakes."
+            },
+            { role: "user", content: input.data.pastedText }
+          ]
+        });
+        feedbackJson = completion.choices[0]?.message.content ?? feedbackJson;
+      } catch (err) {
+        error = err instanceof Error ? err.message : "AI tutor failed";
+      }
+    }
+
+    const feedback = await prisma.aiFeedback.create({
+      data: {
+        submissionId: submission.id,
+        promptId: activePrompt?.id,
+        feedbackJson,
+        model,
+        error
+      }
+    });
+
+    await writeAudit(req.user?.id, "CREATE", "WritingSubmission", submission.id, { promptVersion: activePrompt?.version ?? null, targetStudentId });
+    res.status(201).json({ submission, feedback });
+  } catch (err) {
+    console.error("AI tutor submission failed", err);
+    res.status(500).json({ error: err instanceof Error ? `AI feedback failed: ${err.message}` : "AI feedback failed" });
   }
-
-  const feedback = await prisma.aiFeedback.create({
-    data: {
-      submissionId: submission.id,
-      promptId: activePrompt?.id,
-      feedbackJson,
-      model,
-      error
-    }
-  });
-
-  await writeAudit(req.user?.id, "CREATE", "WritingSubmission", submission.id, { promptVersion: activePrompt?.version ?? null, targetStudentId });
-  res.status(201).json({ submission, feedback });
 });
 
 app.get("/api/admin/users", requireAuth, requireRole("ADMIN"), async (_req, res) => {

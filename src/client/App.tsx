@@ -561,7 +561,14 @@ function AiTutor({ token, assignments, onSubmit }: { token: string; assignments:
         { method: "POST", body: JSON.stringify({ studentId, assignmentId: assignmentId || null, pastedText }) },
         token
       );
-      setFeedback(JSON.parse(response.feedback.feedbackJson));
+      try {
+        setFeedback(JSON.parse(response.feedback.feedbackJson));
+      } catch {
+        setFeedback({ overall: response.feedback.feedbackJson });
+      }
+      if (response.feedback.error) {
+        setError(`AI generated fallback feedback because OpenAI returned: ${response.feedback.error}`);
+      }
       onSubmit();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not submit writing");
