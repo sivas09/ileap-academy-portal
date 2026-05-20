@@ -272,6 +272,7 @@ const productSchema = z.object({
 });
 
 const submissionSchema = z.object({
+  studentId: z.string().optional(),
   assignmentId: z.string().optional().nullable(),
   pastedText: z.string().min(20).max(12000)
 });
@@ -279,6 +280,28 @@ const submissionSchema = z.object({
 const aiPromptSchema = z.object({
   name: z.string().min(2),
   promptText: z.string().min(20)
+});
+
+const adminCreateUserSchema = z.object({
+  email: z.string().email(),
+  firstName: z.string().min(1),
+  lastName: z.string().min(1),
+  role: z.enum(["STUDENT", "TEACHER"]),
+  levelId: z.string().optional().nullable(),
+  teacherLevelIds: z.array(z.string()).optional().default([]),
+  temporaryPassword: z.string().min(8).optional().default("Member123!")
+});
+
+const adminUpdateUserSchema = z.object({
+  firstName: z.string().min(1).optional(),
+  lastName: z.string().min(1).optional(),
+  status: z.enum(["ACTIVE", "DISABLED", "PENDING_APPROVAL"]).optional(),
+  levelId: z.string().optional().nullable(),
+  teacherLevelIds: z.array(z.string()).optional()
+});
+
+const adminResetPasswordSchema = z.object({
+  temporaryPassword: z.string().min(8).default("Member123!")
 });
 
 app.get("/api/health", (_req, res) => {
@@ -641,19 +664,76 @@ app.post("/api/shop/checkout", requireAuth, requireRole("STUDENT", "ADMIN"), asy
   res.status(201).json({ checkoutUrl: session.url, orderId: order.id });
 });
 
-app.post("/api/student/submissions", requireAuth, requireRole("STUDENT", "ADMIN"), async (req, res) => {
+app.post("/api/student/homework", requireAuth, requireRole("STUDENT"), async (req, res) => {
+  const input = z.object({
+    assignmentId: z.string().min(1),
+    pastedText: z.string().min(20).max(12000)
+  }).safeParse(req.body);
+  if (!input.success) {
+    res.status(400).json({ error: input.error.flatten() });
+    return;
+  }
+
+  const levelId = await getStudentLevelId(req.user!.id);
+  const assignment = await prisma.assignment.findUnique({ where: { id: input.data.assignmentId } });
+  if (!assignment || !assignment.isPublished || assignment.levelId !== levelId) {
+    res.status(403).json({ error: "Assignment is not available for your level" });
+    return;
+  }
+
+  const submission = await prisma.writingSubmission.create({
+    data: {
+      studentId: req.user!.id,
+      assignmentId: assignment.id,
+      pastedText: input.data.pastedText,
+      levelId
+    }
+  });
+
+  await writeAudit(req.user?.id, "CREATE", "WritingSubmission", submission.id, { source: "student_homework" });
+  res.status(201).json({ submission });
+});
+
+app.post("/api/student/submissions", requireAuth, requireRole("TEACHER", "ADMIN"), async (req, res) => {
   const input = submissionSchema.safeParse(req.body);
   if (!input.success) {
     res.status(400).json({ error: input.error.flatten() });
     return;
   }
 
+  const targetStudentId = input.data.studentId;
+  if (!targetStudentId) {
+    res.status(400).json({ error: "studentId is required for AI tutor feedback" });
+    return;
+  }
+
+  const targetStudent = await prisma.user.findUnique({
+    where: { id: targetStudentId },
+    include: { student: true }
+  });
+  if (!targetStudent?.student) {
+    res.status(404).json({ error: "Student not found" });
+    return;
+  }
+
+  if (req.user!.role === "TEACHER") {
+    const teacher = await prisma.teacherProfile.findUnique({
+      where: { userId: req.user!.id },
+      include: { levels: true }
+    });
+    const allowedLevelIds = teacher?.levels.map((item) => item.levelId) ?? [];
+    if (!allowedLevelIds.includes(targetStudent.student.levelId)) {
+      res.status(403).json({ error: "You cannot submit AI feedback for this student's level" });
+      return;
+    }
+  }
+
   const activePrompt = await prisma.aiPrompt.findFirst({ where: { isActive: true }, orderBy: { version: "desc" } });
-  const levelId = req.user!.role === "STUDENT" ? await getStudentLevelId(req.user!.id) : null;
+  const levelId = targetStudent.student.levelId;
 
   const submission = await prisma.writingSubmission.create({
     data: {
-      studentId: req.user!.id,
+      studentId: targetStudent.id,
       assignmentId: input.data.assignmentId,
       pastedText: input.data.pastedText,
       levelId
@@ -706,7 +786,7 @@ app.post("/api/student/submissions", requireAuth, requireRole("STUDENT", "ADMIN"
     }
   });
 
-  await writeAudit(req.user?.id, "CREATE", "WritingSubmission", submission.id, { promptVersion: activePrompt?.version ?? null });
+  await writeAudit(req.user?.id, "CREATE", "WritingSubmission", submission.id, { promptVersion: activePrompt?.version ?? null, targetStudentId });
   res.status(201).json({ submission, feedback });
 });
 
@@ -715,7 +795,130 @@ app.get("/api/admin/users", requireAuth, requireRole("ADMIN"), async (_req, res)
     include: { student: { include: { level: true } }, teacher: { include: { levels: { include: { level: true } } } } },
     orderBy: { createdAt: "desc" }
   });
-  res.json(users.map(publicUser));
+  res.json(users.map((user) => ({
+    ...publicUser(user),
+    teacherLevels: user.teacher?.levels.map((item) => item.level) ?? []
+  })));
+});
+
+app.post("/api/admin/users", requireAuth, requireRole("ADMIN"), async (req, res) => {
+  const input = adminCreateUserSchema.safeParse(req.body);
+  if (!input.success) {
+    res.status(400).json({ error: input.error.flatten() });
+    return;
+  }
+
+  if (input.data.role === "STUDENT" && !input.data.levelId) {
+    res.status(400).json({ error: "Student level is required" });
+    return;
+  }
+
+  if (input.data.role === "TEACHER" && input.data.teacherLevelIds.length === 0) {
+    res.status(400).json({ error: "Teacher must be assigned to at least one level" });
+    return;
+  }
+
+  const passwordHash = await bcrypt.hash(input.data.temporaryPassword, 12);
+  const user = await prisma.user.create({
+    data: {
+      email: input.data.email.toLowerCase(),
+      firstName: input.data.firstName,
+      lastName: input.data.lastName,
+      role: input.data.role,
+      passwordHash,
+      student: input.data.role === "STUDENT" && input.data.levelId ? { create: { levelId: input.data.levelId } } : undefined,
+      teacher: input.data.role === "TEACHER"
+        ? { create: { levels: { create: input.data.teacherLevelIds.map((levelId) => ({ levelId })) } } }
+        : undefined
+    },
+    include: { student: { include: { level: true } }, teacher: { include: { levels: { include: { level: true } } } } }
+  });
+
+  await writeAudit(req.user?.id, "CREATE", "User", user.id, { role: user.role });
+  res.status(201).json({
+    ...publicUser(user),
+    teacherLevels: user.teacher?.levels.map((item) => item.level) ?? []
+  });
+});
+
+app.put("/api/admin/users/:id", requireAuth, requireRole("ADMIN"), async (req, res) => {
+  const input = adminUpdateUserSchema.safeParse(req.body);
+  if (!input.success) {
+    res.status(400).json({ error: input.error.flatten() });
+    return;
+  }
+
+  const userId = String(req.params.id);
+  const existing = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { student: true, teacher: true }
+  });
+  if (!existing) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: userId },
+      data: {
+        firstName: input.data.firstName,
+        lastName: input.data.lastName,
+        status: input.data.status
+      }
+    });
+
+    if (existing.role === "STUDENT" && input.data.levelId) {
+      await tx.studentProfile.upsert({
+        where: { userId },
+        update: { levelId: input.data.levelId },
+        create: { userId, levelId: input.data.levelId }
+      });
+    }
+
+    if (existing.role === "TEACHER" && input.data.teacherLevelIds) {
+      const teacher = existing.teacher ?? await tx.teacherProfile.create({ data: { userId } });
+      await tx.teacherLevel.deleteMany({ where: { teacherId: teacher.id } });
+      if (input.data.teacherLevelIds.length > 0) {
+        await tx.teacherLevel.createMany({
+          data: input.data.teacherLevelIds.map((levelId) => ({ teacherId: teacher.id, levelId }))
+        });
+      }
+    }
+  });
+
+  const updated = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { student: { include: { level: true } }, teacher: { include: { levels: { include: { level: true } } } } }
+  });
+
+  await writeAudit(req.user?.id, "UPDATE", "User", userId, {
+    status: input.data.status,
+    levelId: input.data.levelId,
+    teacherLevelIds: input.data.teacherLevelIds
+  });
+
+  res.json(updated ? {
+    ...publicUser(updated),
+    teacherLevels: updated.teacher?.levels.map((item) => item.level) ?? []
+  } : null);
+});
+
+app.post("/api/admin/users/:id/reset-password", requireAuth, requireRole("ADMIN"), async (req, res) => {
+  const input = adminResetPasswordSchema.safeParse(req.body);
+  if (!input.success) {
+    res.status(400).json({ error: input.error.flatten() });
+    return;
+  }
+
+  const passwordHash = await bcrypt.hash(input.data.temporaryPassword, 12);
+  const user = await prisma.user.update({
+    where: { id: String(req.params.id) },
+    data: { passwordHash }
+  });
+
+  await writeAudit(req.user?.id, "UPDATE", "User", user.id, { resetPassword: true });
+  res.json({ ok: true });
 });
 
 app.get("/api/review/submissions", requireAuth, requireRole("ADMIN", "TEACHER"), async (req, res) => {
@@ -761,6 +964,47 @@ app.get("/api/review/submissions", requireAuth, requireRole("ADMIN", "TEACHER"),
   });
 
   res.json(submissions);
+});
+
+app.get("/api/review/students", requireAuth, requireRole("ADMIN", "TEACHER"), async (req, res) => {
+  const levelId = req.query.levelId?.toString();
+  const user = await prisma.user.findUnique({
+    where: { id: req.user!.id },
+    include: { teacher: { include: { levels: true } } }
+  });
+
+  const teacherLevelIds = user?.teacher?.levels.map((item) => item.levelId) ?? [];
+  const allowedLevelIds = req.user!.role === "ADMIN" ? undefined : teacherLevelIds;
+
+  if (req.user!.role === "TEACHER" && allowedLevelIds?.length === 0) {
+    res.json([]);
+    return;
+  }
+
+  if (req.user!.role === "TEACHER" && levelId && !allowedLevelIds?.includes(levelId)) {
+    res.status(403).json({ error: "You cannot view students for this level" });
+    return;
+  }
+
+  const users = await prisma.user.findMany({
+    where: {
+      role: "STUDENT",
+      student: {
+        ...(levelId ? { levelId } : {}),
+        ...(allowedLevelIds ? { levelId: { in: allowedLevelIds } } : {})
+      }
+    },
+    include: { student: { include: { level: true } } },
+    orderBy: [{ lastName: "asc" }, { firstName: "asc" }]
+  });
+
+  res.json(users.map((item) => ({
+    id: item.id,
+    email: item.email,
+    firstName: item.firstName,
+    lastName: item.lastName,
+    level: item.student?.level ?? null
+  })));
 });
 
 app.get("/api/admin/ai-prompts", requireAuth, requireRole("ADMIN"), async (_req, res) => {

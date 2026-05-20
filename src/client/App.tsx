@@ -11,9 +11,10 @@ import {
   Shield,
   ShoppingCart,
   Sparkles,
+  UserRound,
   Video
 } from "lucide-react";
-import { AiPrompt, api, Assignment, DashboardData, Level, money, Resource, ReviewSubmission, Session, uploadApi } from "./api";
+import { AdminUser, AiPrompt, api, Assignment, DashboardData, Level, money, Resource, ReviewStudent, ReviewSubmission, Session, uploadApi } from "./api";
 
 const stored = localStorage.getItem("portal.session");
 
@@ -196,10 +197,11 @@ function Shell({
     ["dashboard", GraduationCap, "Dashboard"],
     ["resources", FileText, "Resources"],
     ["assignments", ClipboardEdit, "Assignments"],
-    ["tutor", Sparkles, "AI Tutor"],
+    ...(session.user.role === "STUDENT" ? [["feedback", Sparkles, "AI Feedback"]] as const : [["tutor", Sparkles, "AI Tutor"]] as const),
     ["shop", ShoppingCart, "Shop"],
     ...(session.user.role === "STUDENT" ? [] : [["review", ClipboardEdit, "Review"]] as const),
     ...(session.user.role === "ADMIN" ? [["prompts", Sparkles, "Prompts"]] as const : []),
+    ...(session.user.role === "ADMIN" ? [["users", UserRound, "Users"]] as const : []),
     ...(session.user.role === "STUDENT" ? [] : [["admin", Shield, "Admin"]] as const)
   ] as const;
 
@@ -261,10 +263,12 @@ function Portal({ session, view }: { session: Session; view: string }) {
 
   if (view === "resources") return <Resources resources={data.resources} token={session.token} />;
   if (view === "assignments") return <Assignments assignments={data.assignments} />;
-  if (view === "tutor") return <AiTutor token={session.token} assignments={data.assignments} onSubmit={refresh} />;
+  if (view === "tutor" && session.user.role !== "STUDENT") return <AiTutor token={session.token} assignments={data.assignments} onSubmit={refresh} />;
+  if (view === "feedback" && session.user.role === "STUDENT") return <StudentFeedback submissions={data.submissions} />;
   if (view === "shop") return <Shop products={data.products} />;
   if (view === "review" && session.user.role !== "STUDENT") return <ReviewSubmissions levels={data.levels} token={session.token} />;
   if (view === "prompts" && session.user.role === "ADMIN") return <PromptManager token={session.token} />;
+  if (view === "users" && session.user.role === "ADMIN") return <UserManager levels={data.levels} token={session.token} />;
   if (view === "admin" && session.user.role !== "STUDENT") return <AdminTools data={data} token={session.token} onChange={refresh} />;
 
   return <Dashboard data={data} />;
@@ -377,12 +381,48 @@ function Assignments({ assignments }: { assignments: Assignment[] }) {
   );
 }
 
+function StudentFeedback({ submissions }: { submissions: DashboardData["submissions"] }) {
+  const withFeedback = submissions.filter((submission) => submission.feedback);
+  return (
+    <div className="cardGrid">
+      {withFeedback.length === 0 && <section className="panel"><p className="empty">No AI feedback is available yet.</p></section>}
+      {withFeedback.map((submission) => {
+        let parsed: any = null;
+        try {
+          parsed = submission.feedback?.feedbackJson ? JSON.parse(submission.feedback.feedbackJson) : null;
+        } catch {
+          parsed = { overall: submission.feedback?.feedbackJson };
+        }
+        return (
+          <article className="resourceCard" key={submission.id}>
+            <strong>{submission.assignment?.title ?? "Writing feedback"}</strong>
+            <span>{new Date(submission.createdAt).toLocaleDateString()}</span>
+            {parsed?.markOutOf10 != null && <div className="price">{parsed.markOutOf10}/10</div>}
+            {parsed && <FeedbackView feedback={parsed} />}
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
 function AiTutor({ token, assignments, onSubmit }: { token: string; assignments: Assignment[]; onSubmit: () => void }) {
+  const [students, setStudents] = useState<ReviewStudent[]>([]);
+  const [studentId, setStudentId] = useState("");
   const [assignmentId, setAssignmentId] = useState(assignments[0]?.id ?? "");
   const [pastedText, setPastedText] = useState("");
   const [feedback, setFeedback] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    api<ReviewStudent[]>("/review/students", {}, token)
+      .then((rows) => {
+        setStudents(rows);
+        setStudentId(rows[0]?.id ?? "");
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "Could not load students"));
+  }, [token]);
 
   async function submit() {
     setLoading(true);
@@ -390,7 +430,7 @@ function AiTutor({ token, assignments, onSubmit }: { token: string; assignments:
     try {
       const response = await api<{ feedback: { feedbackJson: string; error?: string | null } }>(
         "/student/submissions",
-        { method: "POST", body: JSON.stringify({ assignmentId: assignmentId || null, pastedText }) },
+        { method: "POST", body: JSON.stringify({ studentId, assignmentId: assignmentId || null, pastedText }) },
         token
       );
       setFeedback(JSON.parse(response.feedback.feedbackJson));
@@ -408,6 +448,14 @@ function AiTutor({ token, assignments, onSubmit }: { token: string; assignments:
         <h3>Paste Writing</h3>
         <div className="form">
           <label>
+            Student
+            <select value={studentId} onChange={(event) => setStudentId(event.target.value)}>
+              {students.map((student) => (
+                <option key={student.id} value={student.id}>{student.firstName} {student.lastName} - {student.level?.gradeBand ?? "No level"}</option>
+              ))}
+            </select>
+          </label>
+          <label>
             Assignment
             <select value={assignmentId} onChange={(event) => setAssignmentId(event.target.value)}>
               <option value="">General writing practice</option>
@@ -421,7 +469,7 @@ function AiTutor({ token, assignments, onSubmit }: { token: string; assignments:
             <textarea value={pastedText} onChange={(event) => setPastedText(event.target.value)} placeholder="Paste the essay or paragraph here..." />
           </label>
           {error && <div className="error">{error}</div>}
-          <button className="primary" onClick={submit} disabled={loading || pastedText.length < 20}>
+          <button className="primary" onClick={submit} disabled={loading || pastedText.length < 20 || !studentId}>
             <Sparkles size={18} /> Get feedback
           </button>
         </div>
@@ -675,6 +723,187 @@ function PromptManager({ token }: { token: string }) {
             <small>{prompt.promptText.slice(0, 180)}{prompt.promptText.length > 180 ? "..." : ""}</small>
           </div>
         ))}
+      </section>
+    </div>
+  );
+}
+
+function UserManager({ levels, token }: { levels: Level[]; token: string }) {
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [draft, setDraft] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    role: "STUDENT",
+    levelId: levels[0]?.id ?? "",
+    teacherLevelIds: levels[0] ? [levels[0].id] : [],
+    temporaryPassword: "Member123!"
+  });
+
+  async function loadUsers() {
+    setError("");
+    try {
+      setUsers(await api<AdminUser[]>("/admin/users", {}, token));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load users");
+    }
+  }
+
+  useEffect(() => {
+    loadUsers();
+  }, []);
+
+  async function createUser() {
+    setMessage("");
+    setError("");
+    try {
+      await api(
+        "/admin/users",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            email: draft.email,
+            firstName: draft.firstName,
+            lastName: draft.lastName,
+            role: draft.role,
+            levelId: draft.role === "STUDENT" ? draft.levelId : null,
+            teacherLevelIds: draft.role === "TEACHER" ? draft.teacherLevelIds : [],
+            temporaryPassword: draft.temporaryPassword
+          })
+        },
+        token
+      );
+      setDraft({ ...draft, firstName: "", lastName: "", email: "", temporaryPassword: "Member123!" });
+      setMessage("User created.");
+      await loadUsers();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create user");
+    }
+  }
+
+  async function updateUser(user: AdminUser, changes: Record<string, unknown>) {
+    setMessage("");
+    setError("");
+    try {
+      await api(`/admin/users/${user.id}`, { method: "PUT", body: JSON.stringify(changes) }, token);
+      setMessage("User updated.");
+      await loadUsers();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update user");
+    }
+  }
+
+  async function resetPassword(user: AdminUser) {
+    const temporaryPassword = window.prompt(`Temporary password for ${user.email}`, "Member123!");
+    if (!temporaryPassword) return;
+    setMessage("");
+    setError("");
+    try {
+      await api(`/admin/users/${user.id}/reset-password`, { method: "POST", body: JSON.stringify({ temporaryPassword }) }, token);
+      setMessage(`Temporary password reset for ${user.email}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not reset password");
+    }
+  }
+
+  function toggleDraftTeacherLevel(levelId: string) {
+    setDraft((current) => ({
+      ...current,
+      teacherLevelIds: current.teacherLevelIds.includes(levelId)
+        ? current.teacherLevelIds.filter((id) => id !== levelId)
+        : [...current.teacherLevelIds, levelId]
+    }));
+  }
+
+  function toggleUserTeacherLevel(user: AdminUser, levelId: string) {
+    const currentIds = user.teacherLevels.map((level) => level.id);
+    const teacherLevelIds = currentIds.includes(levelId) ? currentIds.filter((id) => id !== levelId) : [...currentIds, levelId];
+    updateUser(user, { teacherLevelIds });
+  }
+
+  const students = users.filter((user) => user.role === "STUDENT");
+  const teachers = users.filter((user) => user.role === "TEACHER");
+
+  return (
+    <div className="userManager">
+      <section className="panel">
+        <h3>Create User</h3>
+        <div className="form compact">
+          <select value={draft.role} onChange={(event) => setDraft({ ...draft, role: event.target.value })}>
+            <option value="STUDENT">Student</option>
+            <option value="TEACHER">Teacher</option>
+          </select>
+          <input placeholder="First name" value={draft.firstName} onChange={(event) => setDraft({ ...draft, firstName: event.target.value })} />
+          <input placeholder="Last name" value={draft.lastName} onChange={(event) => setDraft({ ...draft, lastName: event.target.value })} />
+          <input placeholder="Email" value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} />
+          <input placeholder="Temporary password" value={draft.temporaryPassword} onChange={(event) => setDraft({ ...draft, temporaryPassword: event.target.value })} />
+          {draft.role === "STUDENT" ? (
+            <select value={draft.levelId} onChange={(event) => setDraft({ ...draft, levelId: event.target.value })}>
+              {levels.map((level) => <option key={level.id} value={level.id}>{level.gradeBand}</option>)}
+            </select>
+          ) : (
+            <div className="resourceChecklist">
+              {levels.map((level) => (
+                <label key={level.id}>
+                  <input type="checkbox" checked={draft.teacherLevelIds.includes(level.id)} onChange={() => toggleDraftTeacherLevel(level.id)} />
+                  <span>{level.gradeBand}</span>
+                </label>
+              ))}
+            </div>
+          )}
+          <button className="primary" onClick={createUser}><Plus size={18} /> Create user</button>
+          {message && <p className="success">{message}</p>}
+          {error && <div className="error">{error}</div>}
+        </div>
+      </section>
+
+      <section className="panel">
+        <h3>Students</h3>
+        <div className="userList">
+          {students.map((user) => (
+            <div className="userRow" key={user.id}>
+              <div>
+                <strong>{user.firstName} {user.lastName}</strong>
+                <span>{user.email} | {user.status}</span>
+              </div>
+              <select value={user.level?.id ?? ""} onChange={(event) => updateUser(user, { levelId: event.target.value })}>
+                {levels.map((level) => <option key={level.id} value={level.id}>{level.gradeBand}</option>)}
+              </select>
+              <button className="secondary" onClick={() => updateUser(user, { status: user.status === "ACTIVE" ? "DISABLED" : "ACTIVE" })}>
+                {user.status === "ACTIVE" ? "Disable" : "Enable"}
+              </button>
+              <button className="secondary" onClick={() => resetPassword(user)}>Reset Password</button>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="panel">
+        <h3>Teachers</h3>
+        <div className="userList">
+          {teachers.map((user) => (
+            <div className="userRow teacherUser" key={user.id}>
+              <div>
+                <strong>{user.firstName} {user.lastName}</strong>
+                <span>{user.email} | {user.status}</span>
+              </div>
+              <div className="resourceChecklist compactChecklist">
+                {levels.map((level) => (
+                  <label key={level.id}>
+                    <input type="checkbox" checked={user.teacherLevels.some((item) => item.id === level.id)} onChange={() => toggleUserTeacherLevel(user, level.id)} />
+                    <span>{level.gradeBand}</span>
+                  </label>
+                ))}
+              </div>
+              <button className="secondary" onClick={() => updateUser(user, { status: user.status === "ACTIVE" ? "DISABLED" : "ACTIVE" })}>
+                {user.status === "ACTIVE" ? "Disable" : "Enable"}
+              </button>
+              <button className="secondary" onClick={() => resetPassword(user)}>Reset Password</button>
+            </div>
+          ))}
+        </div>
       </section>
     </div>
   );

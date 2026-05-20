@@ -81,6 +81,14 @@ export type ReviewSubmission = Submission & {
   };
 };
 
+export type ReviewStudent = {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  level: Level | null;
+};
+
 export type DashboardData = {
   user: Session["user"];
   levels: Level[];
@@ -99,6 +107,10 @@ export type AiPrompt = {
   createdAt: string;
   updatedAt: string;
   editedBy?: { firstName: string; lastName: string; email: string } | null;
+};
+
+export type AdminUser = Session["user"] & {
+  teacherLevels: Level[];
 };
 
 export async function api<T>(path: string, options: RequestInit = {}, token?: string): Promise<T> {

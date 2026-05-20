@@ -356,7 +356,8 @@ textarea {
 .twoCol,
 .cardGrid,
 .reviewLayout,
-.adminGrid {
+.adminGrid,
+.userManager {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
@@ -364,6 +365,11 @@ textarea {
 
 .adminGrid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.userManager {
+  grid-template-columns: minmax(280px, 0.75fr) minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
 }
 
 .cardGrid {
@@ -596,6 +602,35 @@ textarea {
   height: 16px;
 }
 
+.compactChecklist {
+  max-height: none;
+}
+
+.userList {
+  display: grid;
+  gap: 10px;
+}
+
+.userRow {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 12px;
+}
+
+.userRow span {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 3px;
+}
+
+.teacherUser {
+  background: #f8fcff;
+}
+
 small {
   color: var(--muted);
 }
@@ -608,6 +643,7 @@ small {
   .twoCol,
   .reviewLayout,
   .adminGrid,
+  .userManager,
   .cardGrid {
     grid-template-columns: 1fr;
   }
