@@ -198,7 +198,7 @@ function Shell({
     ["dashboard", GraduationCap, "Dashboard"],
     ["resources", FileText, "Resources"],
     ["assignments", ClipboardEdit, "Assignments"],
-    ...(session.user.role === "STUDENT" ? [["feedback", Sparkles, "AI Feedback"]] as const : [["tutor", Sparkles, "AI Tutor"]] as const),
+    ...(session.user.role === "STUDENT" ? [["feedback", Sparkles, "Feedback"]] as const : [["tutor", Sparkles, "AI Tutor"]] as const),
     ["shop", ShoppingCart, "Shop"],
     ...(session.user.role === "STUDENT" ? [] : [["review", ClipboardEdit, "Review"]] as const),
     ...(session.user.role === "ADMIN" ? [["prompts", Sparkles, "Prompts"]] as const : []),
@@ -551,7 +551,7 @@ function StudentFeedback({ submissions }: { submissions: DashboardData["submissi
   const withFeedback = submissions.filter((submission) => submission.feedback || submission.teacherFeedback);
   return (
     <div className="cardGrid">
-      {withFeedback.length === 0 && <section className="panel"><p className="empty">No AI feedback is available yet.</p></section>}
+      {withFeedback.length === 0 && <section className="panel"><p className="empty">No feedback is available yet.</p></section>}
       {withFeedback.map((submission) => {
         let parsed: any = null;
         try {
