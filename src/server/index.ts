@@ -10,7 +10,7 @@ import OpenAI from "openai";
 import path from "path";
 import Stripe from "stripe";
 import { z } from "zod";
-import { deleteStoredFile, resolveFileKey, saveUploadedFile } from "./services/storage.js";
+import { deleteStoredFile, downloadStoredFile, saveUploadedFile } from "./services/storage.js";
 
 const prisma = new PrismaClient();
 const app = express();
@@ -677,9 +677,13 @@ app.get("/api/resources/:id/open", requireAuth, async (req, res) => {
   }
 
   try {
-    res.download(resolveFileKey(resource.fileKey), safeDownloadName(resource));
-  } catch {
-    res.status(400).json({ error: "Invalid resource file" });
+    const downloaded = await downloadStoredFile(resource.fileKey);
+    if (downloaded.contentType) res.type(downloaded.contentType);
+    res.attachment(safeDownloadName(resource));
+    res.send(downloaded.buffer);
+  } catch (error) {
+    console.error("Resource download failed", error);
+    res.status(400).json({ error: "Resource file could not be downloaded" });
   }
 });
 
