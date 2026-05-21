@@ -732,6 +732,10 @@ textarea {
   margin-top: 16px;
 }
 
+.accountPanel {
+  max-width: 560px;
+}
+
 .managementList {
   display: grid;
   gap: 12px;

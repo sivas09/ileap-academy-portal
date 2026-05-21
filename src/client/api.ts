@@ -39,6 +39,7 @@ export type Assignment = {
   id: string;
   title: string;
   instructions: string;
+  wordCountGuidance?: string | null;
   level: Level;
   isPublished: boolean;
   isArchived: boolean;

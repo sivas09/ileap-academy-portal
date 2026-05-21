@@ -222,7 +222,8 @@ function Shell({
     ...(session.user.role === "ADMIN" ? [["prompts", Sparkles, "Prompts"]] as const : []),
     ...(session.user.role === "ADMIN" ? [["users", UserRound, "Users"]] as const : []),
     ...(session.user.role === "ADMIN" ? [["website", FileText, "Website"]] as const : []),
-    ...(session.user.role === "STUDENT" ? [] : [["admin", Shield, "Admin"]] as const)
+    ...(session.user.role === "STUDENT" ? [] : [["admin", Shield, "Admin"]] as const),
+    ["account", UserRound, "Account"]
   ] as const;
 
   return (
@@ -282,7 +283,7 @@ function Portal({ session, view }: { session: Session; view: string }) {
   if (!data) return <div className="empty">Loading portal data...</div>;
 
   if (view === "resources") return <Resources resources={data.resources} token={session.token} />;
-  if (view === "assignments") return <Assignments assignments={data.assignments} levels={data.levels} token={session.token} role={session.user.role} onSubmit={refresh} />;
+  if (view === "assignments") return <Assignments assignments={data.assignments} submissions={data.submissions} levels={data.levels} token={session.token} role={session.user.role} onSubmit={refresh} />;
   if (view === "tutor" && session.user.role !== "STUDENT") return <AiTutor token={session.token} assignments={data.assignments} onSubmit={refresh} />;
   if (view === "feedback" && session.user.role === "STUDENT") return <StudentFeedback submissions={data.submissions} />;
   if (view === "shop") return <Shop products={data.products} />;
@@ -291,6 +292,7 @@ function Portal({ session, view }: { session: Session; view: string }) {
   if (view === "users" && session.user.role === "ADMIN") return <UserManager levels={data.levels} token={session.token} />;
   if (view === "website" && session.user.role === "ADMIN") return <WebsiteContentManager token={session.token} />;
   if (view === "admin" && session.user.role !== "STUDENT") return <AdminTools data={data} token={session.token} onChange={refresh} />;
+  if (view === "account") return <AccountSettings token={session.token} />;
 
   return <Dashboard data={data} />;
 }
@@ -303,11 +305,11 @@ function Dashboard({ data }: { data: DashboardData }) {
     <div className="grid">
       <div className="metric"><span>Writing level</span><strong>{data.user.level?.gradeBand ?? data.user.role}</strong></div>
       <div className="metric accentBlue"><span>Available resources</span><strong>{accessible}</strong></div>
-      <div className="metric accentGreen"><span>AI submissions</span><strong>{data.submissions.length}</strong></div>
+      <div className="metric accentGreen"><span>Writing submissions</span><strong>{data.submissions.length}</strong></div>
 
       <section className="panel wide">
         <h3>Today&apos;s Workspace</h3>
-        <p className="lead">Open an assignment, paste writing into the AI Tutor, and review feedback with your teacher.</p>
+        <p className="lead">Open an assignment, submit writing, and review feedback from your teacher.</p>
         <div className="actionRow">
           <span>{data.assignments.length} assignments</span>
           <span>{locked} locked resources</span>
@@ -326,7 +328,7 @@ function Dashboard({ data }: { data: DashboardData }) {
       </section>
 
       <section className="panel">
-        <h3>Recent AI Feedback</h3>
+        <h3>Recent Feedback</h3>
         {data.submissions.length === 0 && <p className="empty">No writing submitted yet.</p>}
         {data.submissions.slice(0, 3).map((submission) => (
           <div className="stackItem" key={submission.id}>
@@ -398,14 +400,30 @@ function iconForResource(resource: Resource) {
   return <FileText size={20} />;
 }
 
+function wordCount(text: string) {
+  return text.trim().split(/\s+/).filter(Boolean).length;
+}
+
+function dateInputValue(value?: string | null) {
+  if (!value) return "";
+  return new Date(value).toISOString().slice(0, 10);
+}
+
+function displayDueDate(value?: string | null) {
+  if (!value) return null;
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
+}
+
 function Assignments({
   assignments,
+  submissions,
   levels,
   token,
   role,
   onSubmit
 }: {
   assignments: Assignment[];
+  submissions: DashboardData["submissions"];
   levels: Level[];
   token: string;
   role: Session["user"]["role"];
@@ -414,7 +432,7 @@ function Assignments({
   const [openId, setOpenId] = useState("");
   const [editId, setEditId] = useState("");
   const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [editDrafts, setEditDrafts] = useState<Record<string, { title: string; instructions: string; levelId: string; isPublished: boolean; isArchived: boolean }>>({});
+  const [editDrafts, setEditDrafts] = useState<Record<string, { title: string; instructions: string; wordCountGuidance: string; levelId: string; isPublished: boolean; isArchived: boolean; dueAt: string }>>({});
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const isStudent = role === "STUDENT";
@@ -436,7 +454,7 @@ function Assignments({
       );
       setDrafts((current) => ({ ...current, [assignment.id]: "" }));
       setOpenId("");
-      setMessage("Homework submitted. Your teacher can now review it and generate AI feedback.");
+      setMessage("Homework submitted. Your teacher can now review it and add feedback.");
       onSubmit();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not submit homework");
@@ -449,7 +467,14 @@ function Assignments({
     setMessage("");
     setError("");
     try {
-      await api(`/admin/assignments/${assignment.id}`, { method: "PUT", body: JSON.stringify(draft) }, token);
+      await api(`/admin/assignments/${assignment.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          ...draft,
+          dueAt: draft.dueAt || null,
+          wordCountGuidance: draft.wordCountGuidance || null
+        })
+      }, token);
       setEditId("");
       setMessage("Assignment updated.");
       onSubmit();
@@ -478,9 +503,11 @@ function Assignments({
       [assignment.id]: current[assignment.id] ?? {
         title: assignment.title,
         instructions: assignment.instructions,
+        wordCountGuidance: assignment.wordCountGuidance ?? "",
         levelId: assignment.level.id,
         isPublished: assignment.isPublished,
-        isArchived: assignment.isArchived
+        isArchived: assignment.isArchived,
+        dueAt: dateInputValue(assignment.dueAt)
       }
     }));
   }
@@ -492,14 +519,22 @@ function Assignments({
       <div className="cardGrid">
         {assignments.map((assignment) => (
           <article className="resourceCard assignmentCard" key={assignment.id}>
+            {(() => {
+              const studentSubmission = submissions.find((submission) => submission.assignment?.id === assignment.id);
+              const dueDate = displayDueDate(assignment.dueAt);
+              return (
+                <>
             <div className="cardIcon"><ClipboardEdit size={20} /></div>
             <strong>{assignment.title}</strong>
             <span>{assignment.level.gradeBand}</span>
             <div className="statusRow">
               <small className={assignment.isPublished ? "statusPill activeStatus" : "statusPill"}>{assignment.isPublished ? "Published" : "Hidden"}</small>
               {assignment.isArchived && <small className="statusPill dangerStatus">Archived</small>}
+              {dueDate && <small className="statusPill">Due {dueDate}</small>}
+              {isStudent && <small className={studentSubmission ? "statusPill activeStatus" : "statusPill"}>{studentSubmission ? studentSubmission.teacherFeedback ? "Teacher feedback ready" : studentSubmission.feedback ? "Feedback ready" : "Submitted" : "Not submitted"}</small>}
             </div>
             <p>{assignment.instructions}</p>
+            {assignment.wordCountGuidance && <small>Recommended length: {assignment.wordCountGuidance}</small>}
             {assignment._count && <small>{assignment._count.submissions} submissions</small>}
             {!isStudent && (
               <>
@@ -515,6 +550,14 @@ function Assignments({
                     <label>
                       Details
                       <textarea value={editDrafts[assignment.id].instructions} onChange={(event) => setEditDrafts((current) => ({ ...current, [assignment.id]: { ...current[assignment.id], instructions: event.target.value } }))} />
+                    </label>
+                    <label>
+                      Word count guidance
+                      <input placeholder="Example: 300-500 words" value={editDrafts[assignment.id].wordCountGuidance} onChange={(event) => setEditDrafts((current) => ({ ...current, [assignment.id]: { ...current[assignment.id], wordCountGuidance: event.target.value } }))} />
+                    </label>
+                    <label>
+                      Due date
+                      <input type="date" value={editDrafts[assignment.id].dueAt} onChange={(event) => setEditDrafts((current) => ({ ...current, [assignment.id]: { ...current[assignment.id], dueAt: event.target.value } }))} />
                     </label>
                     <label>
                       Level
@@ -553,6 +596,10 @@ function Assignments({
                         placeholder="Paste your paragraph or essay here..."
                       />
                     </label>
+                    <div className="statusRow">
+                      <small className="statusPill">{wordCount(drafts[assignment.id] ?? "")} words</small>
+                      <small className="statusPill">{(drafts[assignment.id] ?? "").length}/12,000 characters</small>
+                    </div>
                     <button className="primary" onClick={() => submitHomework(assignment)} disabled={(drafts[assignment.id] ?? "").length < 20}>
                       <Save size={18} /> Submit
                     </button>
@@ -560,6 +607,9 @@ function Assignments({
                 )}
               </>
             )}
+                </>
+              );
+            })()}
           </article>
         ))}
       </div>
@@ -1280,6 +1330,60 @@ function WebsiteContentManager({ token }: { token: string }) {
   );
 }
 
+function AccountSettings({ token }: { token: string }) {
+  const [draft, setDraft] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  async function savePassword(event: React.FormEvent) {
+    event.preventDefault();
+    setMessage("");
+    setError("");
+    if (draft.newPassword !== draft.confirmPassword) {
+      setError("New passwords do not match.");
+      return;
+    }
+    try {
+      await api("/me/change-password", {
+        method: "POST",
+        body: JSON.stringify({
+          currentPassword: draft.currentPassword,
+          newPassword: draft.newPassword
+        })
+      }, token);
+      setDraft({ currentPassword: "", newPassword: "", confirmPassword: "" });
+      setMessage("Password changed.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not change password");
+    }
+  }
+
+  return (
+    <section className="panel accountPanel">
+      <h3>Change Password</h3>
+      <form className="form" onSubmit={savePassword}>
+        <label>
+          Current password
+          <input type="password" value={draft.currentPassword} onChange={(event) => setDraft({ ...draft, currentPassword: event.target.value })} />
+        </label>
+        <label>
+          New password
+          <input type="password" value={draft.newPassword} onChange={(event) => setDraft({ ...draft, newPassword: event.target.value })} />
+        </label>
+        <label>
+          Confirm new password
+          <input type="password" value={draft.confirmPassword} onChange={(event) => setDraft({ ...draft, confirmPassword: event.target.value })} />
+        </label>
+        {message && <p className="success">{message}</p>}
+        {error && <div className="error">{error}</div>}
+        <button className="primary" type="submit" disabled={draft.currentPassword.length < 8 || draft.newPassword.length < 8 || draft.confirmPassword.length < 8}>
+          <Save size={18} /> Change password
+        </button>
+      </form>
+    </section>
+  );
+}
+
 type ResourceDraft = {
   title: string;
   description: string;
@@ -1305,8 +1409,10 @@ function AdminTools({ data, token, onChange }: { data: DashboardData; token: str
   const [assignment, setAssignment] = useState({
     title: "",
     instructions: "",
+    wordCountGuidance: "",
     levelId: data.levels[0]?.id ?? "",
-    isPublished: true
+    isPublished: true,
+    dueAt: ""
   });
   const [product, setProduct] = useState({
     title: "",
@@ -1350,8 +1456,8 @@ function AdminTools({ data, token, onChange }: { data: DashboardData; token: str
     setMessage("");
     setError("");
     try {
-      await api("/admin/assignments", { method: "POST", body: JSON.stringify(assignment) }, token);
-      setAssignment({ ...assignment, title: "", instructions: "" });
+      await api("/admin/assignments", { method: "POST", body: JSON.stringify({ ...assignment, dueAt: assignment.dueAt || null, wordCountGuidance: assignment.wordCountGuidance || null }) }, token);
+      setAssignment({ ...assignment, title: "", instructions: "", wordCountGuidance: "", dueAt: "" });
       setMessage("Assignment saved.");
       onChange();
     } catch (err) {
@@ -1494,6 +1600,8 @@ function AdminTools({ data, token, onChange }: { data: DashboardData; token: str
         <div className="form compact">
           <input placeholder="Title" value={assignment.title} onChange={(event) => setAssignment({ ...assignment, title: event.target.value })} />
           <textarea placeholder="Instructions" value={assignment.instructions} onChange={(event) => setAssignment({ ...assignment, instructions: event.target.value })} />
+          <input placeholder="Word count guidance, e.g. 300-500 words" value={assignment.wordCountGuidance} onChange={(event) => setAssignment({ ...assignment, wordCountGuidance: event.target.value })} />
+          <input type="date" value={assignment.dueAt} onChange={(event) => setAssignment({ ...assignment, dueAt: event.target.value })} />
           <select value={assignment.levelId} onChange={(event) => setAssignment({ ...assignment, levelId: event.target.value })}>
             {data.levels.map((level) => <option key={level.id} value={level.id}>{level.gradeBand}</option>)}
           </select>

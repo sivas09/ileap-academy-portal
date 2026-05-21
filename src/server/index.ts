@@ -279,6 +279,7 @@ const uploadedResourceSchema = resourceSchema.extend({
 const assignmentSchema = z.object({
   title: z.string().min(2),
   instructions: z.string().min(10),
+  wordCountGuidance: z.string().max(80).optional().nullable(),
   levelId: z.string().min(1),
   isPublished: z.boolean().default(false),
   isArchived: z.boolean().default(false),
@@ -344,6 +345,11 @@ const adminUpdateUserSchema = z.object({
 
 const adminResetPasswordSchema = z.object({
   temporaryPassword: z.string().min(8).default("Member123!")
+});
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(8),
+  newPassword: z.string().min(8)
 });
 
 const teacherFeedbackSchema = z.object({
@@ -434,6 +440,25 @@ app.get("/api/me", requireAuth, async (req, res) => {
     include: { student: { include: { level: true } } }
   });
   res.json(user ? publicUser(user) : null);
+});
+
+app.post("/api/me/change-password", requireAuth, async (req, res) => {
+  const input = changePasswordSchema.safeParse(req.body);
+  if (!input.success) {
+    res.status(400).json({ error: input.error.flatten() });
+    return;
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
+  if (!user || !(await bcrypt.compare(input.data.currentPassword, user.passwordHash))) {
+    res.status(401).json({ error: "Current password is incorrect" });
+    return;
+  }
+
+  const passwordHash = await bcrypt.hash(input.data.newPassword, 12);
+  await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
+  await writeAudit(req.user?.id, "UPDATE", "User", user.id, { changePassword: true });
+  res.json({ ok: true });
 });
 
 app.get("/api/dashboard", requireAuth, async (req, res) => {
@@ -668,6 +693,7 @@ app.post("/api/admin/assignments", requireAuth, requireRole("ADMIN", "TEACHER"),
   const assignment = await prisma.assignment.create({
     data: {
       ...input.data,
+      wordCountGuidance: input.data.wordCountGuidance || null,
       dueAt: input.data.dueAt ? new Date(input.data.dueAt) : null
     }
   });
@@ -706,10 +732,11 @@ app.put("/api/admin/assignments/:id", requireAuth, requireRole("ADMIN", "TEACHER
     data: {
       title: input.data.title,
       instructions: input.data.instructions,
+      wordCountGuidance: input.data.wordCountGuidance === "" ? null : input.data.wordCountGuidance,
       levelId: input.data.levelId,
       isPublished: input.data.isPublished,
       isArchived: input.data.isArchived,
-      dueAt: input.data.dueAt ? new Date(input.data.dueAt) : input.data.dueAt === null ? null : undefined
+      dueAt: input.data.dueAt ? new Date(input.data.dueAt) : input.data.dueAt === null || input.data.dueAt === "" ? null : undefined
     },
     include: { level: true, _count: { select: { submissions: true } } }
   });
