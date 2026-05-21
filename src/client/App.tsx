@@ -35,6 +35,16 @@ const defaultSiteContent: SiteContent = {
   grade789Text: "Develop organized essays, persuasive writing, academic vocabulary, and revision habits."
 };
 
+function levelCardText(level: Level, content: SiteContent) {
+  if (level.gradeBand.includes("2/3") || level.code.includes("2-3")) {
+    return { title: content.grade2Title, text: content.grade2Text };
+  }
+  if (level.gradeBand.includes("4/5/6") || level.code.includes("4-5-6") || level.code.includes("4-6")) {
+    return { title: content.grade456Title, text: content.grade456Text };
+  }
+  return { title: content.grade789Title, text: content.grade789Text };
+}
+
 export function App() {
   const [session, setSession] = useState<Session | null>(stored ? JSON.parse(stored) : null);
   const [view, setView] = useState("dashboard");
@@ -94,13 +104,16 @@ function PublicSite({ onLogin }: { onLogin: (session: Session) => void }) {
       </section>
 
       <section className="levelBand">
-        {levels.map((level) => (
-          <article className="levelCard" key={level.id}>
-            <strong>{level.gradeBand}</strong>
-            <h2>{level.code === "grade-2-3" ? content.grade2Title : level.code === "grade-4-6" ? content.grade456Title : content.grade789Title}</h2>
-            <p>{level.code === "grade-2-3" ? content.grade2Text : level.code === "grade-4-6" ? content.grade456Text : content.grade789Text}</p>
-          </article>
-        ))}
+        {levels.map((level) => {
+          const card = levelCardText(level, content);
+          return (
+            <article className="levelCard" key={level.id}>
+              <strong>{level.gradeBand}</strong>
+              <h2>{card.title}</h2>
+              <p>{card.text}</p>
+            </article>
+          );
+        })}
       </section>
     </main>
   );
