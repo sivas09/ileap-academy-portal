@@ -10,7 +10,7 @@ import OpenAI from "openai";
 import path from "path";
 import Stripe from "stripe";
 import { z } from "zod";
-import { resolveFileKey, saveUploadedFile } from "./services/storage.js";
+import { deleteStoredFile, resolveFileKey, saveUploadedFile } from "./services/storage.js";
 
 const prisma = new PrismaClient();
 const app = express();
@@ -584,15 +584,15 @@ app.delete("/api/admin/resources/:id", requireAuth, requireRole("ADMIN"), async 
     return;
   }
 
-  if (resource._count.products > 0 || resource._count.entitlements > 0) {
-    res.status(409).json({
-      error: "This resource is linked to products or student access history. Unpublish it instead of deleting it."
-    });
-    return;
-  }
-
   await prisma.resource.delete({ where: { id: resource.id } });
-  await writeAudit(req.user?.id, "DELETE", "Resource", resource.id, { title: resource.title });
+  if (resource.fileKey) {
+    await deleteStoredFile(resource.fileKey);
+  }
+  await writeAudit(req.user?.id, "DELETE", "Resource", resource.id, {
+    title: resource.title,
+    removedProductLinks: resource._count.products,
+    removedAccessRecords: resource._count.entitlements
+  });
   res.json({ ok: true });
 });
 

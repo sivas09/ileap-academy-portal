@@ -39,3 +39,10 @@ export function resolveFileKey(fileKey: string) {
   }
   return resolved;
 }
+
+export async function deleteStoredFile(fileKey: string) {
+  const resolved = resolveFileKey(fileKey);
+  await fs.unlink(resolved).catch((error: NodeJS.ErrnoException) => {
+    if (error.code !== "ENOENT") throw error;
+  });
+}

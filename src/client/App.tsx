@@ -1316,7 +1316,7 @@ function AdminTools({ data, token, onChange }: { data: DashboardData; token: str
   }
 
   async function deleteResource(resource: Resource) {
-    if (!window.confirm(`Delete "${resource.title}"? If it has products or student access history, the portal will refuse and you should unpublish it instead.`)) return;
+    if (!window.confirm(`Permanently delete "${resource.title}"? This removes it from student view, product links, and student resource access records. This cannot be undone.`)) return;
     setMessage("");
     setError("");
     try {
@@ -1454,7 +1454,7 @@ function AdminTools({ data, token, onChange }: { data: DashboardData; token: str
                   <div className="buttonRow">
                     <button className="primary" onClick={() => updateResource(item)}><Save size={18} /> Save</button>
                     <button className="secondary" onClick={() => updateResource(item, { isPublished: false })}>Unpublish</button>
-                    <button className="secondary dangerButton" onClick={() => deleteResource(item)}><Trash2 size={18} /> Delete if unused</button>
+                    <button className="secondary dangerButton" onClick={() => deleteResource(item)}><Trash2 size={18} /> Delete permanently</button>
                   </div>
                 </div>
               ) : (
