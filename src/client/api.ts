@@ -28,6 +28,7 @@ export type Resource = {
   accessMode: "FREE" | "LEVEL_ASSIGNED" | "INDIVIDUAL_PURCHASE" | "BUNDLE_PURCHASE";
   url?: string | null;
   fileKey?: string | null;
+  originalFileName?: string | null;
   level?: Level | null;
   isPublished: boolean;
   isAccessible: boolean;

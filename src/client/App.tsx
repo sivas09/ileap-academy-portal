@@ -320,6 +320,13 @@ function Dashboard({ data }: { data: DashboardData }) {
 }
 
 function Resources({ resources, token }: { resources: Resource[]; token: string }) {
+  function filenameFromDisposition(disposition: string | null, fallback: string) {
+    const utfMatch = disposition?.match(/filename\*=UTF-8''([^;]+)/i);
+    if (utfMatch?.[1]) return decodeURIComponent(utfMatch[1]);
+    const match = disposition?.match(/filename="?([^"]+)"?/i);
+    return match?.[1] ?? fallback;
+  }
+
   async function openResource(resource: Resource) {
     if (resource.url && !resource.fileKey) {
       window.open(resource.url, "_blank", "noopener,noreferrer");
@@ -337,7 +344,12 @@ function Resources({ resources, token }: { resources: Resource[]; token: string 
 
     const blob = await response.blob();
     const objectUrl = URL.createObjectURL(blob);
-    window.open(objectUrl, "_blank", "noopener,noreferrer");
+    const anchor = document.createElement("a");
+    anchor.href = objectUrl;
+    anchor.download = filenameFromDisposition(response.headers.get("Content-Disposition"), resource.originalFileName ?? resource.title);
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
     setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
   }
 
@@ -350,7 +362,7 @@ function Resources({ resources, token }: { resources: Resource[]; token: string 
           <span>{resource.level?.gradeBand ?? "All levels"} | {resource.type.replace("_", " ")}</span>
           <p>{resource.description}</p>
           {resource.isAccessible ? (
-            <button className="secondary" onClick={() => openResource(resource)}>Open resource</button>
+            <button className="secondary" onClick={() => openResource(resource)}>{resource.fileKey ? "Download resource" : "Open resource"}</button>
           ) : (
             <div className="lockedNote"><Lock size={16} /> Purchase required</div>
           )}

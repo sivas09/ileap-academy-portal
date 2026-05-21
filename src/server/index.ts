@@ -168,6 +168,14 @@ function canAccessResource(resource: Resource, studentLevelId: string | null, en
   return entitlementIds.has(resource.id);
 }
 
+function safeDownloadName(resource: Pick<Resource, "title" | "fileKey" | "originalFileName">) {
+  const sourceName = resource.originalFileName || resource.title;
+  const ext = resource.fileKey ? path.extname(resource.fileKey) : "";
+  const hasExtension = path.extname(sourceName).length > 0;
+  const filename = hasExtension ? sourceName : `${sourceName}${ext}`;
+  return filename.replace(/[<>:"/\\|?*\x00-\x1F]/g, "-").slice(0, 180) || `resource${ext}`;
+}
+
 async function assertResourceAccess(resourceId: string, user: AuthUser) {
   const resource = await prisma.resource.findUnique({ where: { id: resourceId } });
   if (!resource) return null;
@@ -509,6 +517,7 @@ app.post("/api/admin/resources/upload", requireAuth, requireRole("ADMIN", "TEACH
       accessMode: input.data.accessMode,
       url: input.data.url,
       fileKey: input.data.fileKey,
+      originalFileName: stored.originalName,
       levelId: input.data.levelId,
       isPublished: input.data.isPublished
     }
@@ -605,7 +614,7 @@ app.get("/api/resources/:id/open", requireAuth, async (req, res) => {
   }
 
   try {
-    res.sendFile(resolveFileKey(resource.fileKey));
+    res.download(resolveFileKey(resource.fileKey), safeDownloadName(resource));
   } catch {
     res.status(400).json({ error: "Invalid resource file" });
   }
