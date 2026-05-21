@@ -120,8 +120,8 @@ function PublicSite({ onLogin }: { onLogin: (session: Session) => void }) {
 }
 
 function Login({ onLogin, content }: { onLogin: (session: Session) => void; content: SiteContent }) {
-  const [email, setEmail] = useState("student@example.com");
-  const [password, setPassword] = useState("Member123!");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
   async function submit(event: React.FormEvent) {
