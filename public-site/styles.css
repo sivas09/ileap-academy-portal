@@ -83,6 +83,13 @@ nav a {
   text-decoration: none;
 }
 
+.navPortal {
+  border-radius: 8px;
+  background: var(--brand-blue);
+  color: #ffffff;
+  padding: 10px 12px;
+}
+
 .hero,
 .section,
 .portalSection {
@@ -154,6 +161,13 @@ h3 {
   flex-wrap: wrap;
   gap: 12px;
   margin-top: 28px;
+}
+
+.microcopy {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.45;
 }
 
 .primaryButton,
@@ -284,7 +298,8 @@ h3 {
 }
 
 .featureGrid,
-.levelGrid {
+.levelGrid,
+.stepGrid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
@@ -292,6 +307,7 @@ h3 {
 
 .featureGrid article,
 .levelGrid article,
+.stepGrid article,
 .portalSection {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -300,7 +316,8 @@ h3 {
 }
 
 .featureGrid article,
-.levelGrid article {
+.levelGrid article,
+.stepGrid article {
   padding: 22px;
 }
 
@@ -329,6 +346,12 @@ h3 {
 
 .levelGrid strong {
   color: var(--brand-orange);
+}
+
+.stepGrid strong {
+  color: var(--brand-light-blue);
+  font-size: 13px;
+  font-weight: 900;
 }
 
 .portalSection {
@@ -363,6 +386,7 @@ footer a {
   .hero,
   .featureGrid,
   .levelGrid,
+  .stepGrid,
   .portalSection {
     grid-template-columns: 1fr;
   }
