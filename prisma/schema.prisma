@@ -275,3 +275,22 @@ model AuditLog {
   metadata   String?
   createdAt  DateTime    @default(now())
 }
+
+model SiteContent {
+  id             String   @id @default("landing")
+  heroEyebrow    String
+  heroTitle      String
+  heroSubtitle   String
+  announcement   String?
+  loginTitle     String
+  loginHint      String
+  signupTitle    String
+  signupHint     String?
+  grade2Title    String
+  grade2Text     String
+  grade456Title  String
+  grade456Text   String
+  grade789Title  String
+  grade789Text   String
+  updatedAt      DateTime @updatedAt
+}

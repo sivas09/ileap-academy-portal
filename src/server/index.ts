@@ -19,6 +19,22 @@ const jwtSecret = process.env.JWT_SECRET ?? "local-development-secret";
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
 const appUrl = process.env.APP_URL ?? "http://localhost:5174";
+const defaultSiteContent = {
+  heroEyebrow: "English Writing Program",
+  heroTitle: "Writing coaching, level-based resources, and teacher-guided feedback in one portal.",
+  heroSubtitle: "Students access their writing level, complete assignments, use worksheets and video lessons, and receive clear feedback from iLEAP Academy teachers.",
+  announcement: "Welcome to the iLEAP Academy English Writing Portal.",
+  loginTitle: "Portal Login",
+  loginHint: "Use the email and password provided by iLEAP Academy.",
+  signupTitle: "Student Signup",
+  signupHint: "Create an account only if iLEAP Academy has asked you to register for the English Writing Program.",
+  grade2Title: "Foundations",
+  grade2Text: "Build sentence confidence, story ideas, grammar basics, and early paragraph writing.",
+  grade456Title: "Paragraph Builder",
+  grade456Text: "Practice topic sentences, supporting details, structure, transitions, and stronger vocabulary.",
+  grade789Title: "Essay Mastery",
+  grade789Text: "Develop organized essays, persuasive writing, academic vocabulary, and revision habits."
+};
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 25 * 1024 * 1024 },
@@ -291,6 +307,23 @@ const aiPromptSchema = z.object({
   promptText: z.string().min(20)
 });
 
+const siteContentSchema = z.object({
+  heroEyebrow: z.string().min(2).max(80),
+  heroTitle: z.string().min(8).max(180),
+  heroSubtitle: z.string().min(20).max(500),
+  announcement: z.string().max(220).optional().nullable(),
+  loginTitle: z.string().min(2).max(80),
+  loginHint: z.string().min(2).max(220),
+  signupTitle: z.string().min(2).max(80),
+  signupHint: z.string().max(220).optional().nullable(),
+  grade2Title: z.string().min(2).max(80),
+  grade2Text: z.string().min(10).max(300),
+  grade456Title: z.string().min(2).max(80),
+  grade456Text: z.string().min(10).max(300),
+  grade789Title: z.string().min(2).max(80),
+  grade789Text: z.string().min(10).max(300)
+});
+
 const adminCreateUserSchema = z.object({
   email: z.string().email(),
   firstName: z.string().min(1),
@@ -324,6 +357,11 @@ app.get("/api/health", (_req, res) => {
 app.get("/api/public/levels", async (_req, res) => {
   const levels = await prisma.level.findMany({ orderBy: { sortOrder: "asc" } });
   res.json(levels);
+});
+
+app.get("/api/public/site-content", async (_req, res) => {
+  const content = await prisma.siteContent.findUnique({ where: { id: "landing" } });
+  res.json(content ?? defaultSiteContent);
 });
 
 app.get("/api/public/products", async (_req, res) => {
@@ -1248,6 +1286,28 @@ app.post("/api/admin/ai-prompts", requireAuth, requireRole("ADMIN"), async (req,
 
   await writeAudit(req.user?.id, "PROMPT_CHANGE", "AiPrompt", prompt.id, { version: prompt.version, name: prompt.name });
   res.status(201).json(prompt);
+});
+
+app.get("/api/admin/site-content", requireAuth, requireRole("ADMIN"), async (_req, res) => {
+  const content = await prisma.siteContent.findUnique({ where: { id: "landing" } });
+  res.json(content ?? defaultSiteContent);
+});
+
+app.put("/api/admin/site-content", requireAuth, requireRole("ADMIN"), async (req, res) => {
+  const input = siteContentSchema.safeParse(req.body);
+  if (!input.success) {
+    res.status(400).json({ error: input.error.flatten() });
+    return;
+  }
+
+  const content = await prisma.siteContent.upsert({
+    where: { id: "landing" },
+    update: input.data,
+    create: { id: "landing", ...input.data }
+  });
+
+  await writeAudit(req.user?.id, "UPDATE", "SiteContent", content.id, { section: "landing" });
+  res.json(content);
 });
 
 if (process.env.NODE_ENV === "production") {

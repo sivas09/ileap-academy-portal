@@ -115,6 +115,23 @@ export type AiPrompt = {
   editedBy?: { firstName: string; lastName: string; email: string } | null;
 };
 
+export type SiteContent = {
+  heroEyebrow: string;
+  heroTitle: string;
+  heroSubtitle: string;
+  announcement?: string | null;
+  loginTitle: string;
+  loginHint: string;
+  signupTitle: string;
+  signupHint?: string | null;
+  grade2Title: string;
+  grade2Text: string;
+  grade456Title: string;
+  grade456Text: string;
+  grade789Title: string;
+  grade789Text: string;
+};
+
 export type AdminUser = Session["user"] & {
   teacherLevels: Level[];
 };

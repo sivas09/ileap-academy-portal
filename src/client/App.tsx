@@ -15,9 +15,25 @@ import {
   UserRound,
   Video
 } from "lucide-react";
-import { AdminUser, AiPrompt, api, Assignment, DashboardData, Level, money, Resource, ReviewStudent, ReviewSubmission, Session, uploadApi } from "./api";
+import { AdminUser, AiPrompt, api, Assignment, DashboardData, Level, money, Resource, ReviewStudent, ReviewSubmission, Session, SiteContent, uploadApi } from "./api";
 
 const stored = localStorage.getItem("portal.session");
+const defaultSiteContent: SiteContent = {
+  heroEyebrow: "English Writing Program",
+  heroTitle: "Writing coaching, level-based resources, and teacher-guided feedback in one portal.",
+  heroSubtitle: "Students access their writing level, complete assignments, use worksheets and video lessons, and receive clear feedback from iLEAP Academy teachers.",
+  announcement: "Welcome to the iLEAP Academy English Writing Portal.",
+  loginTitle: "Portal Login",
+  loginHint: "Use the email and password provided by iLEAP Academy.",
+  signupTitle: "Student Signup",
+  signupHint: "Create an account only if iLEAP Academy has asked you to register for the English Writing Program.",
+  grade2Title: "Foundations",
+  grade2Text: "Build sentence confidence, story ideas, grammar basics, and early paragraph writing.",
+  grade456Title: "Paragraph Builder",
+  grade456Text: "Practice topic sentences, supporting details, structure, transitions, and stronger vocabulary.",
+  grade789Title: "Essay Mastery",
+  grade789Text: "Develop organized essays, persuasive writing, academic vocabulary, and revision habits."
+};
 
 export function App() {
   const [session, setSession] = useState<Session | null>(stored ? JSON.parse(stored) : null);
@@ -40,9 +56,11 @@ export function App() {
 function PublicSite({ onLogin }: { onLogin: (session: Session) => void }) {
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [levels, setLevels] = useState<Level[]>([]);
+  const [content, setContent] = useState<SiteContent>(defaultSiteContent);
 
   useEffect(() => {
     api<Level[]>("/public/levels").then(setLevels).catch(() => setLevels([]));
+    api<SiteContent>("/public/site-content").then(setContent).catch(() => setContent(defaultSiteContent));
   }, []);
 
   return (
@@ -60,11 +78,10 @@ function PublicSite({ onLogin }: { onLogin: (session: Session) => void }) {
 
       <section className="hero">
         <div className="heroCopy">
-          <span className="eyebrow">English Writing Program</span>
-          <h1>Writing coaching, level-based resources, and AI tutor feedback in one portal.</h1>
-          <p>
-            Students access their level dashboard, practice assignments, worksheets, video lessons, books, and structured AI writing feedback.
-          </p>
+          <span className="eyebrow">{content.heroEyebrow}</span>
+          <h1>{content.heroTitle}</h1>
+          <p>{content.heroSubtitle}</p>
+          {content.announcement && <div className="announcement">{content.announcement}</div>}
           <div className="heroStats">
             <span>Grade 2/3</span>
             <span>Grade 4/5/6</span>
@@ -72,7 +89,7 @@ function PublicSite({ onLogin }: { onLogin: (session: Session) => void }) {
           </div>
         </div>
         <section className="authCard">
-          {mode === "login" ? <Login onLogin={onLogin} /> : <Signup levels={levels} onLogin={onLogin} />}
+          {mode === "login" ? <Login onLogin={onLogin} content={content} /> : <Signup levels={levels} onLogin={onLogin} content={content} />}
         </section>
       </section>
 
@@ -80,8 +97,8 @@ function PublicSite({ onLogin }: { onLogin: (session: Session) => void }) {
         {levels.map((level) => (
           <article className="levelCard" key={level.id}>
             <strong>{level.gradeBand}</strong>
-            <h2>{level.name}</h2>
-            <p>{level.description}</p>
+            <h2>{level.code === "grade-2-3" ? content.grade2Title : level.code === "grade-4-6" ? content.grade456Title : content.grade789Title}</h2>
+            <p>{level.code === "grade-2-3" ? content.grade2Text : level.code === "grade-4-6" ? content.grade456Text : content.grade789Text}</p>
           </article>
         ))}
       </section>
@@ -89,7 +106,7 @@ function PublicSite({ onLogin }: { onLogin: (session: Session) => void }) {
   );
 }
 
-function Login({ onLogin }: { onLogin: (session: Session) => void }) {
+function Login({ onLogin, content }: { onLogin: (session: Session) => void; content: SiteContent }) {
   const [email, setEmail] = useState("student@example.com");
   const [password, setPassword] = useState("Member123!");
   const [error, setError] = useState("");
@@ -106,7 +123,7 @@ function Login({ onLogin }: { onLogin: (session: Session) => void }) {
 
   return (
     <form onSubmit={submit} className="form">
-      <h2>Portal Login</h2>
+      <h2>{content.loginTitle}</h2>
       <label>
         Email
         <input value={email} onChange={(event) => setEmail(event.target.value)} />
@@ -117,12 +134,12 @@ function Login({ onLogin }: { onLogin: (session: Session) => void }) {
       </label>
       {error && <div className="error">{error}</div>}
       <button className="primary" type="submit">Sign in</button>
-      <p className="hint">Try student@example.com, teacher@example.com, or admin@example.com with Member123!</p>
+      <p className="hint">{content.loginHint}</p>
     </form>
   );
 }
 
-function Signup({ levels, onLogin }: { levels: Level[]; onLogin: (session: Session) => void }) {
+function Signup({ levels, onLogin, content }: { levels: Level[]; onLogin: (session: Session) => void; content: SiteContent }) {
   const [draft, setDraft] = useState({
     firstName: "",
     lastName: "",
@@ -148,7 +165,7 @@ function Signup({ levels, onLogin }: { levels: Level[]; onLogin: (session: Sessi
 
   return (
     <form onSubmit={submit} className="form">
-      <h2>Student Signup</h2>
+      <h2>{content.signupTitle}</h2>
       <div className="splitFields">
         <label>
           First name
@@ -177,6 +194,7 @@ function Signup({ levels, onLogin }: { levels: Level[]; onLogin: (session: Sessi
       </label>
       {error && <div className="error">{error}</div>}
       <button className="primary" type="submit">Create account</button>
+      {content.signupHint && <p className="hint">{content.signupHint}</p>}
     </form>
   );
 }
@@ -203,6 +221,7 @@ function Shell({
     ...(session.user.role === "STUDENT" ? [] : [["review", ClipboardEdit, "Review"]] as const),
     ...(session.user.role === "ADMIN" ? [["prompts", Sparkles, "Prompts"]] as const : []),
     ...(session.user.role === "ADMIN" ? [["users", UserRound, "Users"]] as const : []),
+    ...(session.user.role === "ADMIN" ? [["website", FileText, "Website"]] as const : []),
     ...(session.user.role === "STUDENT" ? [] : [["admin", Shield, "Admin"]] as const)
   ] as const;
 
@@ -270,6 +289,7 @@ function Portal({ session, view }: { session: Session; view: string }) {
   if (view === "review" && session.user.role !== "STUDENT") return <ReviewSubmissions levels={data.levels} assignments={data.assignments} token={session.token} />;
   if (view === "prompts" && session.user.role === "ADMIN") return <PromptManager token={session.token} />;
   if (view === "users" && session.user.role === "ADMIN") return <UserManager levels={data.levels} token={session.token} />;
+  if (view === "website" && session.user.role === "ADMIN") return <WebsiteContentManager token={session.token} />;
   if (view === "admin" && session.user.role !== "STUDENT") return <AdminTools data={data} token={session.token} onChange={refresh} />;
 
   return <Dashboard data={data} />;
@@ -1149,6 +1169,111 @@ function UserManager({ levels, token }: { levels: Level[]; token: string }) {
               <button className="secondary" onClick={() => resetPassword(user)}>Reset Password</button>
             </div>
           ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function WebsiteContentManager({ token }: { token: string }) {
+  const [draft, setDraft] = useState<SiteContent>(defaultSiteContent);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  async function load() {
+    setError("");
+    try {
+      setDraft(await api<SiteContent>("/admin/site-content", {}, token));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load website content");
+    }
+  }
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  async function save() {
+    setMessage("");
+    setError("");
+    try {
+      setDraft(await api<SiteContent>("/admin/site-content", { method: "PUT", body: JSON.stringify(draft) }, token));
+      setMessage("Website content saved.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save website content");
+    }
+  }
+
+  return (
+    <div className="twoCol">
+      <section className="panel">
+        <h3>Landing Page Content</h3>
+        <div className="form">
+          <label>
+            Small heading
+            <input value={draft.heroEyebrow} onChange={(event) => setDraft({ ...draft, heroEyebrow: event.target.value })} />
+          </label>
+          <label>
+            Main headline
+            <textarea value={draft.heroTitle} onChange={(event) => setDraft({ ...draft, heroTitle: event.target.value })} />
+          </label>
+          <label>
+            Description
+            <textarea value={draft.heroSubtitle} onChange={(event) => setDraft({ ...draft, heroSubtitle: event.target.value })} />
+          </label>
+          <label>
+            Announcement
+            <input value={draft.announcement ?? ""} onChange={(event) => setDraft({ ...draft, announcement: event.target.value })} />
+          </label>
+          <label>
+            Login title
+            <input value={draft.loginTitle} onChange={(event) => setDraft({ ...draft, loginTitle: event.target.value })} />
+          </label>
+          <label>
+            Login helper text
+            <input value={draft.loginHint} onChange={(event) => setDraft({ ...draft, loginHint: event.target.value })} />
+          </label>
+          <label>
+            Signup title
+            <input value={draft.signupTitle} onChange={(event) => setDraft({ ...draft, signupTitle: event.target.value })} />
+          </label>
+          <label>
+            Signup helper text
+            <input value={draft.signupHint ?? ""} onChange={(event) => setDraft({ ...draft, signupHint: event.target.value })} />
+          </label>
+          {message && <p className="success">{message}</p>}
+          {error && <div className="error">{error}</div>}
+          <button className="primary" onClick={save}><Save size={18} /> Save website content</button>
+        </div>
+      </section>
+
+      <section className="panel">
+        <h3>Grade Card Text</h3>
+        <div className="form">
+          <label>
+            Grade 2/3 title
+            <input value={draft.grade2Title} onChange={(event) => setDraft({ ...draft, grade2Title: event.target.value })} />
+          </label>
+          <label>
+            Grade 2/3 description
+            <textarea value={draft.grade2Text} onChange={(event) => setDraft({ ...draft, grade2Text: event.target.value })} />
+          </label>
+          <label>
+            Grade 4/5/6 title
+            <input value={draft.grade456Title} onChange={(event) => setDraft({ ...draft, grade456Title: event.target.value })} />
+          </label>
+          <label>
+            Grade 4/5/6 description
+            <textarea value={draft.grade456Text} onChange={(event) => setDraft({ ...draft, grade456Text: event.target.value })} />
+          </label>
+          <label>
+            Grade 7/8/9 title
+            <input value={draft.grade789Title} onChange={(event) => setDraft({ ...draft, grade789Title: event.target.value })} />
+          </label>
+          <label>
+            Grade 7/8/9 description
+            <textarea value={draft.grade789Text} onChange={(event) => setDraft({ ...draft, grade789Text: event.target.value })} />
+          </label>
         </div>
       </section>
     </div>
