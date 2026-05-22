@@ -170,6 +170,21 @@ h3 {
   line-height: 1.45;
 }
 
+.contactLine {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+  color: var(--brand-blue);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.contactLine a {
+  color: var(--brand-blue);
+  text-decoration: none;
+}
+
 .primaryButton,
 .secondaryButton {
   display: inline-flex;
@@ -185,6 +200,10 @@ h3 {
 .primaryButton {
   background: var(--brand-blue);
   color: #ffffff;
+}
+
+.trialButton {
+  background: var(--brand-red);
 }
 
 .secondaryButton {
@@ -362,6 +381,13 @@ h3 {
   margin-bottom: 56px;
 }
 
+.ctaActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
 footer {
   justify-content: center;
   min-height: 86px;
@@ -397,6 +423,10 @@ footer a {
 
   .portalSection .primaryButton {
     width: fit-content;
+  }
+
+  .ctaActions {
+    justify-content: flex-start;
   }
 }
 
