@@ -20,7 +20,7 @@ const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPE
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
 const appUrl = process.env.APP_URL ?? "http://localhost:5174";
 const defaultSiteContent = {
-  heroEyebrow: "English Writing Program",
+  heroEyebrow: "English Writing Program for Children",
   heroTitle: "Writing coaching, level-based resources, and teacher-guided feedback in one portal.",
   heroSubtitle: "Students access their writing level, complete assignments, use worksheets and video lessons, and receive clear feedback from iLEAP Academy teachers.",
   announcement: "Welcome to the iLEAP Academy English Writing Portal.",

@@ -22,7 +22,7 @@ type NavItem = [string, React.ComponentType<{ size?: number }>, string];
 
 const stored = localStorage.getItem("portal.session");
 const defaultSiteContent: SiteContent = {
-  heroEyebrow: "English Writing Program",
+  heroEyebrow: "English Writing Program for Children",
   heroTitle: "Writing coaching, level-based resources, and teacher-guided feedback in one portal.",
   heroSubtitle: "Students access their writing level, complete assignments, use worksheets and video lessons, and receive clear feedback from iLEAP Academy teachers.",
   announcement: "Welcome to the iLEAP Academy English Writing Portal.",
@@ -83,7 +83,7 @@ function PublicSite({ onLogin }: { onLogin: (session: Session) => void }) {
           <span>iLEAP Academy</span>
         </div>
         <div className="navActions">
-          <span className="portalAccessBadge">Student Portal</span>
+          <a className="portalAccessBadge" href="https://www.ileapacademy.com/">Student Portal</a>
         </div>
       </nav>
 
