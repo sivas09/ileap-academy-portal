@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   BookOpen,
   ClipboardEdit,
+  CheckCircle2,
   FileText,
   GraduationCap,
   Lock,
@@ -16,6 +17,8 @@ import {
   Video
 } from "lucide-react";
 import { AdminUser, AiPrompt, api, Assignment, DashboardData, Level, money, Resource, ReviewStudent, ReviewSubmission, Session, SiteContent, uploadApi } from "./api";
+
+type NavItem = [string, React.ComponentType<{ size?: number }>, string];
 
 const stored = localStorage.getItem("portal.session");
 const defaultSiteContent: SiteContent = {
@@ -64,7 +67,6 @@ export function App() {
 }
 
 function PublicSite({ onLogin }: { onLogin: (session: Session) => void }) {
-  const [mode, setMode] = useState<"login" | "signup">("login");
   const [levels, setLevels] = useState<Level[]>([]);
   const [content, setContent] = useState<SiteContent>(defaultSiteContent);
 
@@ -81,8 +83,7 @@ function PublicSite({ onLogin }: { onLogin: (session: Session) => void }) {
           <span>iLEAP Academy</span>
         </div>
         <div className="navActions">
-          <button className={mode === "login" ? "tab active" : "tab"} onClick={() => setMode("login")}>Login</button>
-          <button className={mode === "signup" ? "tab active" : "tab"} onClick={() => setMode("signup")}>Student Signup</button>
+          <span className="portalAccessBadge">Student Portal</span>
         </div>
       </nav>
 
@@ -99,7 +100,7 @@ function PublicSite({ onLogin }: { onLogin: (session: Session) => void }) {
           </div>
         </div>
         <section className="authCard">
-          {mode === "login" ? <Login onLogin={onLogin} content={content} /> : <Signup levels={levels} onLogin={onLogin} content={content} />}
+          <Login onLogin={onLogin} content={content} />
         </section>
       </section>
 
@@ -225,19 +226,24 @@ function Shell({
   onLogout: () => void;
   children: React.ReactNode;
 }) {
-  const items = [
+  const activeItems: NavItem[] = session.user.status === "PENDING_APPROVAL"
+    ? []
+    : [
+        ["resources", FileText, "Resources"],
+        ["assignments", ClipboardEdit, "Assignments"],
+        ...(session.user.role === "STUDENT" ? [["feedback", Sparkles, "Feedback"] as NavItem] : [["tutor", Sparkles, "AI Tutor"] as NavItem]),
+        ["shop", ShoppingCart, "Shop"],
+        ...(session.user.role === "STUDENT" ? [] : [["review", ClipboardEdit, "Review"] as NavItem]),
+        ...(session.user.role === "ADMIN" ? [["prompts", Sparkles, "Prompts"] as NavItem] : []),
+        ...(session.user.role === "ADMIN" ? [["users", UserRound, "Users"] as NavItem] : []),
+        ...(session.user.role === "ADMIN" ? [["website", FileText, "Website"] as NavItem] : []),
+        ...(session.user.role === "STUDENT" ? [] : [["admin", Shield, "Admin"] as NavItem])
+      ];
+  const items: NavItem[] = [
     ["dashboard", GraduationCap, "Dashboard"],
-    ["resources", FileText, "Resources"],
-    ["assignments", ClipboardEdit, "Assignments"],
-    ...(session.user.role === "STUDENT" ? [["feedback", Sparkles, "Feedback"]] as const : [["tutor", Sparkles, "AI Tutor"]] as const),
-    ["shop", ShoppingCart, "Shop"],
-    ...(session.user.role === "STUDENT" ? [] : [["review", ClipboardEdit, "Review"]] as const),
-    ...(session.user.role === "ADMIN" ? [["prompts", Sparkles, "Prompts"]] as const : []),
-    ...(session.user.role === "ADMIN" ? [["users", UserRound, "Users"]] as const : []),
-    ...(session.user.role === "ADMIN" ? [["website", FileText, "Website"]] as const : []),
-    ...(session.user.role === "STUDENT" ? [] : [["admin", Shield, "Admin"]] as const),
+    ...activeItems,
     ["account", UserRound, "Account"]
-  ] as const;
+  ];
 
   return (
     <div className="appFrame">
@@ -246,7 +252,7 @@ function Shell({
           <img className="logoMark small" src="/Logo_large.jpg" alt="iLEAP Academy" />
           <div>
             <strong>iLEAP Academy</strong>
-            <span>{session.user.role}</span>
+            <span>{session.user.status === "PENDING_APPROVAL" ? "Pending approval" : session.user.role}</span>
           </div>
         </div>
         <nav>
@@ -294,6 +300,7 @@ function Portal({ session, view }: { session: Session; view: string }) {
 
   if (error) return <div className="error">{error}</div>;
   if (!data) return <div className="empty">Loading portal data...</div>;
+  if (data.user.status === "PENDING_APPROVAL" && view !== "account") return <PendingApproval user={data.user} levels={data.levels} />;
 
   if (view === "resources") return <Resources resources={data.resources} token={session.token} />;
   if (view === "assignments") return <Assignments assignments={data.assignments} submissions={data.submissions} levels={data.levels} token={session.token} role={session.user.role} onSubmit={refresh} />;
@@ -308,6 +315,61 @@ function Portal({ session, view }: { session: Session; view: string }) {
   if (view === "account") return <AccountSettings token={session.token} />;
 
   return <Dashboard data={data} />;
+}
+
+function PendingApproval({ user, levels }: { user: Session["user"]; levels: Level[] }) {
+  return (
+    <div className="approvalPage">
+      <section className="approvalHero">
+        <div className="approvalIcon">
+          <Lock size={28} />
+        </div>
+        <div>
+          <span className="eyebrow">Account Review</span>
+          <h2>Your student account is waiting for approval.</h2>
+          <p>
+            iLEAP Academy will verify your registration before assignments, paid resources,
+            homework submission, and feedback tools become available.
+          </p>
+        </div>
+      </section>
+
+      <section className="panel">
+        <h3>Registration Details</h3>
+        <div className="approvalDetails">
+          <div>
+            <span>Name</span>
+            <strong>{user.firstName} {user.lastName}</strong>
+          </div>
+          <div>
+            <span>Email</span>
+            <strong>{user.email}</strong>
+          </div>
+          <div>
+            <span>Requested level</span>
+            <strong>{user.level?.gradeBand ?? "Not selected"}</strong>
+          </div>
+          <div>
+            <span>Status</span>
+            <strong>Pending approval</strong>
+          </div>
+        </div>
+      </section>
+
+      <section className="panel">
+        <h3>Available Writing Levels</h3>
+        <div className="levelPreviewList">
+          {levels.map((level) => (
+            <article key={level.id}>
+              <strong>{level.gradeBand}</strong>
+              <span>{level.name}</span>
+              <p>{level.description}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
 }
 
 function Dashboard({ data }: { data: DashboardData }) {
@@ -1152,6 +1214,11 @@ function UserManager({ levels, token }: { levels: Level[]; token: string }) {
     updateUser(user, { teacherLevelIds });
   }
 
+  function statusLabel(status: AdminUser["status"]) {
+    if (status === "PENDING_APPROVAL") return "Pending approval";
+    return status[0] + status.slice(1).toLowerCase();
+  }
+
   const students = users.filter((user) => user.role === "STUDENT");
   const teachers = users.filter((user) => user.role === "TEACHER");
 
@@ -1195,11 +1262,19 @@ function UserManager({ levels, token }: { levels: Level[]; token: string }) {
             <div className="userRow" key={user.id}>
               <div>
                 <strong>{user.firstName} {user.lastName}</strong>
-                <span>{user.email} | {user.status}</span>
+                <span>{user.email}</span>
+                <small className={user.status === "ACTIVE" ? "statusPill activeStatus" : user.status === "PENDING_APPROVAL" ? "statusPill pendingStatus" : "statusPill dangerStatus"}>
+                  {statusLabel(user.status)}
+                </small>
               </div>
               <select value={user.level?.id ?? ""} onChange={(event) => updateUser(user, { levelId: event.target.value })}>
                 {levels.map((level) => <option key={level.id} value={level.id}>{level.gradeBand}</option>)}
               </select>
+              {user.status === "PENDING_APPROVAL" && (
+                <button className="primary" onClick={() => updateUser(user, { status: "ACTIVE" })}>
+                  <CheckCircle2 size={18} /> Approve
+                </button>
+              )}
               <button className="secondary" onClick={() => updateUser(user, { status: user.status === "ACTIVE" ? "DISABLED" : "ACTIVE" })}>
                 {user.status === "ACTIVE" ? "Disable" : "Enable"}
               </button>
@@ -1216,7 +1291,10 @@ function UserManager({ levels, token }: { levels: Level[]; token: string }) {
             <div className="userRow teacherUser" key={user.id}>
               <div>
                 <strong>{user.firstName} {user.lastName}</strong>
-                <span>{user.email} | {user.status}</span>
+                <span>{user.email}</span>
+                <small className={user.status === "ACTIVE" ? "statusPill activeStatus" : user.status === "PENDING_APPROVAL" ? "statusPill pendingStatus" : "statusPill dangerStatus"}>
+                  {statusLabel(user.status)}
+                </small>
               </div>
               <div className="resourceChecklist compactChecklist">
                 {levels.map((level) => (

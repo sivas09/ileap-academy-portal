@@ -6,7 +6,7 @@ export type Session = {
     firstName: string;
     lastName: string;
     role: "STUDENT" | "TEACHER" | "ADMIN";
-    status: string;
+    status: "ACTIVE" | "DISABLED" | "PENDING_APPROVAL";
     level?: Level | null;
   };
 };

@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { AccessMode, PrismaClient, Resource, Role } from "@prisma/client";
+import { AccessMode, AccountStatus, PrismaClient, Resource, Role } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import cors from "cors";
 import express from "express";
@@ -140,6 +140,35 @@ function requireRole(...roles: Role[]) {
   };
 }
 
+async function requireActiveAccount(req: express.Request, res: express.Response, next: express.NextFunction) {
+  if (!req.user) {
+    res.status(401).json({ error: "Missing authorization token" });
+    return;
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: req.user.id },
+    select: { status: true }
+  });
+
+  if (!user) {
+    res.status(401).json({ error: "Invalid or expired token" });
+    return;
+  }
+
+  if (user.status === AccountStatus.PENDING_APPROVAL) {
+    res.status(403).json({ error: "Your account is waiting for iLEAP Academy approval before this feature is available." });
+    return;
+  }
+
+  if (user.status !== AccountStatus.ACTIVE) {
+    res.status(403).json({ error: "This account is disabled. Contact iLEAP Academy for help." });
+    return;
+  }
+
+  next();
+}
+
 async function writeAudit(actorId: string | undefined, action: "CREATE" | "UPDATE" | "DELETE" | "LOGIN" | "ACCESS_CHANGE" | "PROMPT_CHANGE" | "PAYMENT_EVENT", entityType: string, entityId?: string, metadata?: unknown) {
   await prisma.auditLog.create({
     data: {
@@ -254,10 +283,10 @@ const loginSchema = z.object({
 });
 
 const signupSchema = z.object({
-  email: z.string().email(),
+  email: z.string().email().transform((value) => value.toLowerCase().trim()),
   password: z.string().min(8),
-  firstName: z.string().min(1),
-  lastName: z.string().min(1),
+  firstName: z.string().trim().min(1),
+  lastName: z.string().trim().min(1),
   levelId: z.string().min(1)
 });
 
@@ -393,22 +422,31 @@ app.post("/api/auth/signup", async (req, res) => {
   }
 
   const passwordHash = await bcrypt.hash(input.data.password, 12);
-  const user = await prisma.user.create({
-    data: {
-      email: input.data.email.toLowerCase(),
-      passwordHash,
-      firstName: input.data.firstName,
-      lastName: input.data.lastName,
-      role: "STUDENT",
-      student: { create: { levelId: level.id } }
-    },
-    include: { student: { include: { level: true } } }
-  });
+  try {
+    const user = await prisma.user.create({
+      data: {
+        email: input.data.email,
+        passwordHash,
+        firstName: input.data.firstName,
+        lastName: input.data.lastName,
+        role: "STUDENT",
+        status: "PENDING_APPROVAL",
+        student: { create: { levelId: level.id } }
+      },
+      include: { student: { include: { level: true } } }
+    });
 
-  const authUser = { id: user.id, role: user.role, email: user.email };
-  await writeAudit(user.id, "CREATE", "User", user.id, { source: "student_signup", level: level.code });
+    const authUser = { id: user.id, role: user.role, email: user.email };
+    await writeAudit(user.id, "CREATE", "User", user.id, { source: "student_signup", level: level.code, status: user.status });
 
-  res.status(201).json({ token: signToken(authUser), user: publicUser(user) });
+    res.status(201).json({ token: signToken(authUser), user: publicUser(user) });
+  } catch (err: any) {
+    if (err?.code === "P2002") {
+      res.status(409).json({ error: "An account with this email already exists." });
+      return;
+    }
+    throw err;
+  }
 });
 
 app.post("/api/auth/login", async (req, res) => {
@@ -423,7 +461,7 @@ app.post("/api/auth/login", async (req, res) => {
     include: { student: { include: { level: true } } }
   });
 
-  if (!user || user.status !== "ACTIVE" || !(await bcrypt.compare(input.data.password, user.passwordHash))) {
+  if (!user || user.status === "DISABLED" || !(await bcrypt.compare(input.data.password, user.passwordHash))) {
     res.status(401).json({ error: "Invalid email or password" });
     return;
   }
@@ -473,6 +511,24 @@ app.get("/api/dashboard", requireAuth, async (req, res) => {
   }
 
   const levels = await prisma.level.findMany({ orderBy: { sortOrder: "asc" } });
+
+  if (user.status === "PENDING_APPROVAL") {
+    res.json({
+      user: publicUser(user),
+      levels,
+      resources: [],
+      assignments: [],
+      products: [],
+      submissions: []
+    });
+    return;
+  }
+
+  if (user.status !== "ACTIVE") {
+    res.status(403).json({ error: "This account is disabled. Contact iLEAP Academy for help." });
+    return;
+  }
+
   const studentLevelId = user.role === "STUDENT" ? user.student?.levelId ?? null : null;
   const entitlements = await prisma.entitlement.findMany({
     where: { userId: user.id, isActive: true },
@@ -541,7 +597,7 @@ app.get("/api/dashboard", requireAuth, async (req, res) => {
   });
 });
 
-app.post("/api/admin/resources", requireAuth, requireRole("ADMIN", "TEACHER"), async (req, res) => {
+app.post("/api/admin/resources", requireAuth, requireActiveAccount, requireRole("ADMIN", "TEACHER"), async (req, res) => {
   const input = resourceSchema.safeParse(req.body);
   if (!input.success) {
     res.status(400).json({ error: input.error.flatten() });
@@ -553,7 +609,7 @@ app.post("/api/admin/resources", requireAuth, requireRole("ADMIN", "TEACHER"), a
   res.status(201).json(resource);
 });
 
-app.post("/api/admin/resources/upload", requireAuth, requireRole("ADMIN", "TEACHER"), upload.single("file"), async (req, res) => {
+app.post("/api/admin/resources/upload", requireAuth, requireActiveAccount, requireRole("ADMIN", "TEACHER"), upload.single("file"), async (req, res) => {
   if (!req.file) {
     res.status(400).json({ error: "File is required" });
     return;
@@ -596,7 +652,7 @@ app.post("/api/admin/resources/upload", requireAuth, requireRole("ADMIN", "TEACH
   res.status(201).json(resource);
 });
 
-app.put("/api/admin/resources/:id", requireAuth, requireRole("ADMIN", "TEACHER"), async (req, res) => {
+app.put("/api/admin/resources/:id", requireAuth, requireActiveAccount, requireRole("ADMIN", "TEACHER"), async (req, res) => {
   const input = resourceSchema.partial().safeParse(req.body);
   if (!input.success) {
     res.status(400).json({ error: input.error.flatten() });
@@ -635,7 +691,7 @@ app.put("/api/admin/resources/:id", requireAuth, requireRole("ADMIN", "TEACHER")
   res.json({ ...updated, isAccessible: true });
 });
 
-app.delete("/api/admin/resources/:id", requireAuth, requireRole("ADMIN"), async (req, res) => {
+app.delete("/api/admin/resources/:id", requireAuth, requireActiveAccount, requireRole("ADMIN"), async (req, res) => {
   const resource = await prisma.resource.findUnique({
     where: { id: String(req.params.id) },
     include: {
@@ -659,7 +715,7 @@ app.delete("/api/admin/resources/:id", requireAuth, requireRole("ADMIN"), async 
   res.json({ ok: true });
 });
 
-app.get("/api/resources/:id/open", requireAuth, async (req, res) => {
+app.get("/api/resources/:id/open", requireAuth, requireActiveAccount, async (req, res) => {
   const resource = await assertResourceAccess(String(req.params.id), req.user!);
   if (!resource) {
     res.status(404).json({ error: "Resource not found or not accessible" });
@@ -687,7 +743,7 @@ app.get("/api/resources/:id/open", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/api/admin/assignments", requireAuth, requireRole("ADMIN", "TEACHER"), async (req, res) => {
+app.post("/api/admin/assignments", requireAuth, requireActiveAccount, requireRole("ADMIN", "TEACHER"), async (req, res) => {
   const input = assignmentSchema.safeParse(req.body);
   if (!input.success) {
     res.status(400).json({ error: input.error.flatten() });
@@ -705,7 +761,7 @@ app.post("/api/admin/assignments", requireAuth, requireRole("ADMIN", "TEACHER"),
   res.status(201).json(assignment);
 });
 
-app.put("/api/admin/assignments/:id", requireAuth, requireRole("ADMIN", "TEACHER"), async (req, res) => {
+app.put("/api/admin/assignments/:id", requireAuth, requireActiveAccount, requireRole("ADMIN", "TEACHER"), async (req, res) => {
   const input = assignmentSchema.partial().safeParse(req.body);
   if (!input.success) {
     res.status(400).json({ error: input.error.flatten() });
@@ -749,7 +805,7 @@ app.put("/api/admin/assignments/:id", requireAuth, requireRole("ADMIN", "TEACHER
   res.json(updated);
 });
 
-app.delete("/api/admin/assignments/:id", requireAuth, requireRole("ADMIN", "TEACHER"), async (req, res) => {
+app.delete("/api/admin/assignments/:id", requireAuth, requireActiveAccount, requireRole("ADMIN", "TEACHER"), async (req, res) => {
   const assignment = await prisma.assignment.findUnique({
     where: { id: String(req.params.id) },
     include: { _count: { select: { submissions: true } } }
@@ -783,7 +839,7 @@ app.delete("/api/admin/assignments/:id", requireAuth, requireRole("ADMIN", "TEAC
   res.json({ ok: true });
 });
 
-app.post("/api/admin/products", requireAuth, requireRole("ADMIN"), async (req, res) => {
+app.post("/api/admin/products", requireAuth, requireActiveAccount, requireRole("ADMIN"), async (req, res) => {
   const input = productSchema.safeParse(req.body);
   if (!input.success) {
     res.status(400).json({ error: input.error.flatten() });
@@ -816,7 +872,7 @@ app.post("/api/admin/products", requireAuth, requireRole("ADMIN"), async (req, r
   res.status(201).json(product);
 });
 
-app.post("/api/shop/checkout", requireAuth, requireRole("STUDENT", "ADMIN"), async (req, res) => {
+app.post("/api/shop/checkout", requireAuth, requireActiveAccount, requireRole("STUDENT", "ADMIN"), async (req, res) => {
   const input = z.object({ productId: z.string() }).safeParse(req.body);
   if (!input.success) {
     res.status(400).json({ error: input.error.flatten() });
@@ -887,7 +943,7 @@ app.post("/api/shop/checkout", requireAuth, requireRole("STUDENT", "ADMIN"), asy
   res.status(201).json({ checkoutUrl: session.url, orderId: order.id });
 });
 
-app.post("/api/student/homework", requireAuth, requireRole("STUDENT"), async (req, res) => {
+app.post("/api/student/homework", requireAuth, requireActiveAccount, requireRole("STUDENT"), async (req, res) => {
   const input = z.object({
     assignmentId: z.string().min(1),
     pastedText: z.string().min(20).max(12000)
@@ -917,7 +973,7 @@ app.post("/api/student/homework", requireAuth, requireRole("STUDENT"), async (re
   res.status(201).json({ submission });
 });
 
-app.post("/api/student/submissions", requireAuth, requireRole("TEACHER", "ADMIN"), async (req, res) => {
+app.post("/api/student/submissions", requireAuth, requireActiveAccount, requireRole("TEACHER", "ADMIN"), async (req, res) => {
   try {
     const input = submissionSchema.safeParse(req.body);
     if (!input.success) {
@@ -1018,7 +1074,7 @@ app.post("/api/student/submissions", requireAuth, requireRole("TEACHER", "ADMIN"
   }
 });
 
-app.get("/api/admin/users", requireAuth, requireRole("ADMIN"), async (_req, res) => {
+app.get("/api/admin/users", requireAuth, requireActiveAccount, requireRole("ADMIN"), async (_req, res) => {
   const users = await prisma.user.findMany({
     include: { student: { include: { level: true } }, teacher: { include: { levels: { include: { level: true } } } } },
     orderBy: { createdAt: "desc" }
@@ -1029,7 +1085,7 @@ app.get("/api/admin/users", requireAuth, requireRole("ADMIN"), async (_req, res)
   })));
 });
 
-app.post("/api/admin/users", requireAuth, requireRole("ADMIN"), async (req, res) => {
+app.post("/api/admin/users", requireAuth, requireActiveAccount, requireRole("ADMIN"), async (req, res) => {
   const input = adminCreateUserSchema.safeParse(req.body);
   if (!input.success) {
     res.status(400).json({ error: input.error.flatten() });
@@ -1069,7 +1125,7 @@ app.post("/api/admin/users", requireAuth, requireRole("ADMIN"), async (req, res)
   });
 });
 
-app.put("/api/admin/users/:id", requireAuth, requireRole("ADMIN"), async (req, res) => {
+app.put("/api/admin/users/:id", requireAuth, requireActiveAccount, requireRole("ADMIN"), async (req, res) => {
   const input = adminUpdateUserSchema.safeParse(req.body);
   if (!input.success) {
     res.status(400).json({ error: input.error.flatten() });
@@ -1132,7 +1188,7 @@ app.put("/api/admin/users/:id", requireAuth, requireRole("ADMIN"), async (req, r
   } : null);
 });
 
-app.post("/api/admin/users/:id/reset-password", requireAuth, requireRole("ADMIN"), async (req, res) => {
+app.post("/api/admin/users/:id/reset-password", requireAuth, requireActiveAccount, requireRole("ADMIN"), async (req, res) => {
   const input = adminResetPasswordSchema.safeParse(req.body);
   if (!input.success) {
     res.status(400).json({ error: input.error.flatten() });
@@ -1149,7 +1205,7 @@ app.post("/api/admin/users/:id/reset-password", requireAuth, requireRole("ADMIN"
   res.json({ ok: true });
 });
 
-app.get("/api/review/submissions", requireAuth, requireRole("ADMIN", "TEACHER"), async (req, res) => {
+app.get("/api/review/submissions", requireAuth, requireActiveAccount, requireRole("ADMIN", "TEACHER"), async (req, res) => {
   const levelId = req.query.levelId?.toString();
   const user = await prisma.user.findUnique({
     where: { id: req.user!.id },
@@ -1194,7 +1250,7 @@ app.get("/api/review/submissions", requireAuth, requireRole("ADMIN", "TEACHER"),
   res.json(submissions);
 });
 
-app.put("/api/review/submissions/:id/teacher-feedback", requireAuth, requireRole("ADMIN", "TEACHER"), async (req, res) => {
+app.put("/api/review/submissions/:id/teacher-feedback", requireAuth, requireActiveAccount, requireRole("ADMIN", "TEACHER"), async (req, res) => {
   const input = teacherFeedbackSchema.safeParse(req.body);
   if (!input.success) {
     res.status(400).json({ error: input.error.flatten() });
@@ -1245,7 +1301,7 @@ app.put("/api/review/submissions/:id/teacher-feedback", requireAuth, requireRole
   res.json(updated);
 });
 
-app.get("/api/review/students", requireAuth, requireRole("ADMIN", "TEACHER"), async (req, res) => {
+app.get("/api/review/students", requireAuth, requireActiveAccount, requireRole("ADMIN", "TEACHER"), async (req, res) => {
   const levelId = req.query.levelId?.toString();
   const user = await prisma.user.findUnique({
     where: { id: req.user!.id },
@@ -1286,7 +1342,7 @@ app.get("/api/review/students", requireAuth, requireRole("ADMIN", "TEACHER"), as
   })));
 });
 
-app.get("/api/admin/ai-prompts", requireAuth, requireRole("ADMIN"), async (_req, res) => {
+app.get("/api/admin/ai-prompts", requireAuth, requireActiveAccount, requireRole("ADMIN"), async (_req, res) => {
   const prompts = await prisma.aiPrompt.findMany({
     include: { editedBy: { select: { firstName: true, lastName: true, email: true } } },
     orderBy: [{ isActive: "desc" }, { version: "desc" }]
@@ -1294,7 +1350,7 @@ app.get("/api/admin/ai-prompts", requireAuth, requireRole("ADMIN"), async (_req,
   res.json(prompts);
 });
 
-app.post("/api/admin/ai-prompts", requireAuth, requireRole("ADMIN"), async (req, res) => {
+app.post("/api/admin/ai-prompts", requireAuth, requireActiveAccount, requireRole("ADMIN"), async (req, res) => {
   const input = aiPromptSchema.safeParse(req.body);
   if (!input.success) {
     res.status(400).json({ error: input.error.flatten() });
@@ -1319,12 +1375,12 @@ app.post("/api/admin/ai-prompts", requireAuth, requireRole("ADMIN"), async (req,
   res.status(201).json(prompt);
 });
 
-app.get("/api/admin/site-content", requireAuth, requireRole("ADMIN"), async (_req, res) => {
+app.get("/api/admin/site-content", requireAuth, requireActiveAccount, requireRole("ADMIN"), async (_req, res) => {
   const content = await prisma.siteContent.findUnique({ where: { id: "landing" } });
   res.json(content ?? defaultSiteContent);
 });
 
-app.put("/api/admin/site-content", requireAuth, requireRole("ADMIN"), async (req, res) => {
+app.put("/api/admin/site-content", requireAuth, requireActiveAccount, requireRole("ADMIN"), async (req, res) => {
   const input = siteContentSchema.safeParse(req.body);
   if (!input.success) {
     res.status(400).json({ error: input.error.flatten() });
