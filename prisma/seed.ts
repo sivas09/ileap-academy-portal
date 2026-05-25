@@ -15,6 +15,8 @@ async function main() {
   await prisma.aiPrompt.deleteMany();
   await prisma.assignment.deleteMany();
   await prisma.resource.deleteMany();
+  await prisma.lesson.deleteMany();
+  await prisma.topic.deleteMany();
   await prisma.teacherLevel.deleteMany();
   await prisma.teacherProfile.deleteMany();
   await prisma.studentProfile.deleteMany();
@@ -103,6 +105,66 @@ async function main() {
     }
   });
 
+  const essayTopic = await prisma.topic.create({
+    data: {
+      levelId: essayMastery.id,
+      title: "Persuasive Essay Structure",
+      description: "Plan thesis statements, body paragraphs, counterarguments, and conclusions.",
+      sortOrder: 1,
+      isPublished: true
+    }
+  });
+
+  const paragraphTopic = await prisma.topic.create({
+    data: {
+      levelId: paragraphBuilder.id,
+      title: "Strong Paragraphs",
+      description: "Build topic sentences, supporting details, and closing sentences.",
+      sortOrder: 1,
+      isPublished: true
+    }
+  });
+
+  const storyTopic = await prisma.topic.create({
+    data: {
+      levelId: storyBuilder.id,
+      title: "Story Foundations",
+      description: "Develop complete sentences and simple story structure.",
+      sortOrder: 1,
+      isPublished: true
+    }
+  });
+
+  const [essayLesson, paragraphLesson, storyLesson] = await Promise.all([
+    prisma.lesson.create({
+      data: {
+        topicId: essayTopic.id,
+        title: "Week 1: Essay Structure",
+        description: "Understand the parts of an essay and prepare a persuasive plan.",
+        sortOrder: 1,
+        isPublished: true
+      }
+    }),
+    prisma.lesson.create({
+      data: {
+        topicId: paragraphTopic.id,
+        title: "Week 1: Topic Sentences",
+        description: "Write focused topic sentences and relevant supporting details.",
+        sortOrder: 1,
+        isPublished: true
+      }
+    }),
+    prisma.lesson.create({
+      data: {
+        topicId: storyTopic.id,
+        title: "Week 1: Story Ideas",
+        description: "Practice complete sentences and simple story details.",
+        sortOrder: 1,
+        isPublished: true
+      }
+    })
+  ]);
+
   const resources = await Promise.all([
     prisma.resource.create({
       data: {
@@ -111,6 +173,8 @@ async function main() {
         type: "PDF",
         accessMode: "LEVEL_ASSIGNED",
         levelId: essayMastery.id,
+        topicId: essayTopic.id,
+        lessonId: essayLesson.id,
         url: "https://example.com/essay-structure-guide.pdf",
         isPublished: true
       }
@@ -122,6 +186,8 @@ async function main() {
         type: "WORKSHEET",
         accessMode: "LEVEL_ASSIGNED",
         levelId: paragraphBuilder.id,
+        topicId: paragraphTopic.id,
+        lessonId: paragraphLesson.id,
         url: "https://example.com/paragraph-builder-worksheet.pdf",
         isPublished: true
       }
@@ -133,6 +199,8 @@ async function main() {
         type: "VIDEO_LINK",
         accessMode: "FREE",
         levelId: storyBuilder.id,
+        topicId: storyTopic.id,
+        lessonId: storyLesson.id,
         url: "https://www.youtube.com/",
         isPublished: true
       }
@@ -144,6 +212,8 @@ async function main() {
         type: "BOOK",
         accessMode: "INDIVIDUAL_PURCHASE",
         levelId: essayMastery.id,
+        topicId: essayTopic.id,
+        lessonId: essayLesson.id,
         url: "https://example.com/essay-mastery-workbook.pdf",
         isPublished: true
       }
@@ -156,12 +226,16 @@ async function main() {
         title: "Persuasive Essay Practice",
         instructions: "Paste a persuasive essay about whether students should have daily reading time.",
         levelId: essayMastery.id,
+        topicId: essayTopic.id,
+        lessonId: essayLesson.id,
         isPublished: true
       },
       {
         title: "Strong Paragraph Practice",
         instructions: "Write one paragraph with a clear topic sentence, three details, and a closing sentence.",
         levelId: paragraphBuilder.id,
+        topicId: paragraphTopic.id,
+        lessonId: paragraphLesson.id,
         isPublished: true
       }
     ]

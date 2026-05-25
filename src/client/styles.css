@@ -843,6 +843,46 @@ textarea {
   gap: 12px;
 }
 
+.curriculumList {
+  display: grid;
+  gap: 12px;
+}
+
+.curriculumRow {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 14px;
+}
+
+.curriculumRow span,
+.curriculumRow p {
+  display: block;
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.lessonList {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+}
+
+.lessonRow {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcff;
+  padding: 8px 10px;
+}
+
 .managementRow {
   display: grid;
   grid-template-columns: minmax(220px, 0.45fr) minmax(0, 1fr);
@@ -888,6 +928,8 @@ small {
   .reviewLayout,
   .adminGrid,
   .userManager,
+  .curriculumRow,
+  .lessonRow,
   .managementRow,
   .managementEditor,
   .cardGrid,

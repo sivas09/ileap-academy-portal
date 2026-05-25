@@ -20,6 +20,28 @@ export type Level = {
   sortOrder: number;
 };
 
+export type Lesson = {
+  id: string;
+  topicId: string;
+  title: string;
+  description?: string | null;
+  sortOrder: number;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  isPublished: boolean;
+};
+
+export type Topic = {
+  id: string;
+  levelId: string;
+  level?: Level;
+  title: string;
+  description?: string | null;
+  sortOrder: number;
+  isPublished: boolean;
+  lessons: Lesson[];
+};
+
 export type Resource = {
   id: string;
   title: string;
@@ -30,6 +52,10 @@ export type Resource = {
   fileKey?: string | null;
   originalFileName?: string | null;
   level?: Level | null;
+  topic?: Topic | null;
+  topicId?: string | null;
+  lesson?: (Lesson & { topic?: Topic | null }) | null;
+  lessonId?: string | null;
   isPublished: boolean;
   isAccessible: boolean;
   _count?: { products: number; entitlements: number };
@@ -44,6 +70,10 @@ export type Assignment = {
   isPublished: boolean;
   isArchived: boolean;
   dueAt?: string | null;
+  topic?: Topic | null;
+  topicId?: string | null;
+  lesson?: (Lesson & { topic?: Topic | null }) | null;
+  lessonId?: string | null;
   _count?: { submissions: number };
 };
 
@@ -99,6 +129,7 @@ export type ReviewStudent = {
 export type DashboardData = {
   user: Session["user"];
   levels: Level[];
+  curriculum: Topic[];
   resources: Resource[];
   assignments: Assignment[];
   products: Product[];

@@ -243,7 +243,7 @@ function Portal({ session, view }: { session: Session; view: string }) {
   if (data.user.status === "PENDING_APPROVAL" && view !== "account") return <PendingApproval user={data.user} levels={data.levels} />;
 
   if (view === "resources") return <Resources resources={data.resources} token={session.token} />;
-  if (view === "assignments") return <Assignments assignments={data.assignments} submissions={data.submissions} levels={data.levels} token={session.token} role={session.user.role} onSubmit={refresh} />;
+  if (view === "assignments") return <Assignments assignments={data.assignments} submissions={data.submissions} levels={data.levels} curriculum={data.curriculum} token={session.token} role={session.user.role} onSubmit={refresh} />;
   if (view === "tutor" && session.user.role !== "STUDENT") return <AiTutor token={session.token} assignments={data.assignments} onSubmit={refresh} />;
   if (view === "feedback" && session.user.role === "STUDENT") return <StudentFeedback submissions={data.submissions} />;
   if (view === "shop") return <Shop products={data.products} />;
@@ -333,6 +333,17 @@ function Dashboard({ data }: { data: DashboardData }) {
       </section>
 
       <section className="panel">
+        <h3>Current Topics</h3>
+        {data.curriculum.length === 0 && <p className="empty">No active topics yet.</p>}
+        {data.curriculum.slice(0, 4).map((topic) => (
+          <div className="stackItem" key={topic.id}>
+            <strong>{topic.title}</strong>
+            <span>{topic.level?.gradeBand ?? "Level"} | {topic.lessons.length} lessons</span>
+          </div>
+        ))}
+      </section>
+
+      <section className="panel">
         <h3>Recent Assignments</h3>
         {data.assignments.slice(0, 3).map((assignment) => (
           <div className="stackItem" key={assignment.id}>
@@ -403,6 +414,12 @@ function Resources({ resources, token }: { resources: Resource[]; token: string 
           <div className="cardIcon">{iconForResource(resource)}</div>
           <strong>{resource.title}</strong>
           <span>{resource.level?.gradeBand ?? "All levels"} | {resource.type.replace("_", " ")}</span>
+          {(resource.topic || resource.lesson) && (
+            <div className="statusRow">
+              {resource.topic && <small className="statusPill">{resource.topic.title}</small>}
+              {resource.lesson && <small className="statusPill">{resource.lesson.title}</small>}
+            </div>
+          )}
           <p>{resource.description}</p>
           {resource.isAccessible ? (
             <button className="secondary" onClick={() => openResource(resource)}>{resource.fileKey ? "Download resource" : "Open resource"}</button>
@@ -439,6 +456,7 @@ function Assignments({
   assignments,
   submissions,
   levels,
+  curriculum,
   token,
   role,
   onSubmit
@@ -446,6 +464,7 @@ function Assignments({
   assignments: Assignment[];
   submissions: DashboardData["submissions"];
   levels: Level[];
+  curriculum: DashboardData["curriculum"];
   token: string;
   role: Session["user"]["role"];
   onSubmit: () => void;
@@ -453,7 +472,7 @@ function Assignments({
   const [openId, setOpenId] = useState("");
   const [editId, setEditId] = useState("");
   const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [editDrafts, setEditDrafts] = useState<Record<string, { title: string; instructions: string; wordCountGuidance: string; levelId: string; isPublished: boolean; isArchived: boolean; dueAt: string }>>({});
+  const [editDrafts, setEditDrafts] = useState<Record<string, { title: string; instructions: string; wordCountGuidance: string; levelId: string; topicId: string; lessonId: string; isPublished: boolean; isArchived: boolean; dueAt: string }>>({});
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const isStudent = role === "STUDENT";
@@ -490,11 +509,13 @@ function Assignments({
     try {
       await api(`/admin/assignments/${assignment.id}`, {
         method: "PUT",
-        body: JSON.stringify({
-          ...draft,
-          dueAt: draft.dueAt || null,
-          wordCountGuidance: draft.wordCountGuidance || null
-        })
+          body: JSON.stringify({
+            ...draft,
+            dueAt: draft.dueAt || null,
+            wordCountGuidance: draft.wordCountGuidance || null,
+            topicId: draft.topicId || null,
+            lessonId: draft.lessonId || null
+          })
       }, token);
       setEditId("");
       setMessage("Assignment updated.");
@@ -526,11 +547,21 @@ function Assignments({
         instructions: assignment.instructions,
         wordCountGuidance: assignment.wordCountGuidance ?? "",
         levelId: assignment.level.id,
+        topicId: assignment.topic?.id ?? "",
+        lessonId: assignment.lesson?.id ?? "",
         isPublished: assignment.isPublished,
         isArchived: assignment.isArchived,
         dueAt: dateInputValue(assignment.dueAt)
       }
     }));
+  }
+
+  function topicsForLevel(levelId: string) {
+    return curriculum.filter((topic) => topic.levelId === levelId);
+  }
+
+  function lessonsForTopic(topicId: string) {
+    return curriculum.find((topic) => topic.id === topicId)?.lessons ?? [];
   }
 
   return (
@@ -552,6 +583,8 @@ function Assignments({
               <small className={assignment.isPublished ? "statusPill activeStatus" : "statusPill"}>{assignment.isPublished ? "Published" : "Hidden"}</small>
               {assignment.isArchived && <small className="statusPill dangerStatus">Archived</small>}
               {dueDate && <small className="statusPill">Due {dueDate}</small>}
+              {assignment.topic && <small className="statusPill">{assignment.topic.title}</small>}
+              {assignment.lesson && <small className="statusPill">{assignment.lesson.title}</small>}
               {isStudent && <small className={studentSubmission ? "statusPill activeStatus" : "statusPill"}>{studentSubmission ? studentSubmission.teacherFeedback ? "Teacher feedback ready" : studentSubmission.feedback ? "Feedback ready" : "Submitted" : "Not submitted"}</small>}
             </div>
             <p>{assignment.instructions}</p>
@@ -584,6 +617,20 @@ function Assignments({
                       Level
                       <select value={editDrafts[assignment.id].levelId} onChange={(event) => setEditDrafts((current) => ({ ...current, [assignment.id]: { ...current[assignment.id], levelId: event.target.value } }))}>
                         {levels.map((level) => <option key={level.id} value={level.id}>{level.gradeBand}</option>)}
+                      </select>
+                    </label>
+                    <label>
+                      Topic
+                      <select value={editDrafts[assignment.id].topicId} onChange={(event) => setEditDrafts((current) => ({ ...current, [assignment.id]: { ...current[assignment.id], topicId: event.target.value, lessonId: "" } }))}>
+                        <option value="">No topic</option>
+                        {topicsForLevel(editDrafts[assignment.id].levelId).map((topic) => <option key={topic.id} value={topic.id}>{topic.title}</option>)}
+                      </select>
+                    </label>
+                    <label>
+                      Lesson / Week
+                      <select value={editDrafts[assignment.id].lessonId} onChange={(event) => setEditDrafts((current) => ({ ...current, [assignment.id]: { ...current[assignment.id], lessonId: event.target.value } }))} disabled={!editDrafts[assignment.id].topicId}>
+                        <option value="">No lesson</option>
+                        {lessonsForTopic(editDrafts[assignment.id].topicId).map((lesson) => <option key={lesson.id} value={lesson.id}>{lesson.title}</option>)}
                       </select>
                     </label>
                     <label className="inlineCheck">
@@ -1427,6 +1474,8 @@ type ResourceDraft = {
   type: Resource["type"];
   accessMode: Resource["accessMode"];
   levelId: string;
+  topicId: string;
+  lessonId: string;
   url: string;
   isPublished: boolean;
 };
@@ -1438,6 +1487,8 @@ function AdminTools({ data, token, onChange }: { data: DashboardData; token: str
     type: "PDF",
     accessMode: "LEVEL_ASSIGNED",
     levelId: data.levels[0]?.id ?? "",
+    topicId: "",
+    lessonId: "",
     url: "",
     isPublished: true
   });
@@ -1448,8 +1499,26 @@ function AdminTools({ data, token, onChange }: { data: DashboardData; token: str
     instructions: "",
     wordCountGuidance: "",
     levelId: data.levels[0]?.id ?? "",
+    topicId: "",
+    lessonId: "",
     isPublished: true,
     dueAt: ""
+  });
+  const [topic, setTopic] = useState({
+    title: "",
+    description: "",
+    levelId: data.levels[0]?.id ?? "",
+    sortOrder: "1",
+    isPublished: false
+  });
+  const [lesson, setLesson] = useState({
+    title: "",
+    description: "",
+    topicId: data.curriculum[0]?.id ?? "",
+    sortOrder: "1",
+    startsAt: "",
+    endsAt: "",
+    isPublished: false
   });
   const [product, setProduct] = useState({
     title: "",
@@ -1463,6 +1532,84 @@ function AdminTools({ data, token, onChange }: { data: DashboardData; token: str
   const [resourceDrafts, setResourceDrafts] = useState<Record<string, ResourceDraft>>({});
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+
+  function topicsForLevel(levelId: string) {
+    return data.curriculum.filter((item) => item.levelId === levelId);
+  }
+
+  function lessonsForTopic(topicId: string) {
+    return data.curriculum.find((item) => item.id === topicId)?.lessons ?? [];
+  }
+
+  async function createTopic() {
+    setMessage("");
+    setError("");
+    try {
+      await api("/admin/topics", {
+        method: "POST",
+        body: JSON.stringify({
+          ...topic,
+          sortOrder: Number(topic.sortOrder),
+          description: topic.description || null
+        })
+      }, token);
+      setTopic({ ...topic, title: "", description: "", sortOrder: String(Number(topic.sortOrder) + 1) });
+      setMessage("Topic saved.");
+      onChange();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save topic");
+    }
+  }
+
+  async function updateTopic(topicId: string, changes: Record<string, unknown>) {
+    setMessage("");
+    setError("");
+    try {
+      await api(`/admin/topics/${topicId}`, { method: "PUT", body: JSON.stringify(changes) }, token);
+      setMessage("Topic updated.");
+      onChange();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update topic");
+    }
+  }
+
+  async function createLesson() {
+    setMessage("");
+    setError("");
+    if (!lesson.topicId) {
+      setError("Create or choose a topic before adding a lesson.");
+      return;
+    }
+    try {
+      await api("/admin/lessons", {
+        method: "POST",
+        body: JSON.stringify({
+          ...lesson,
+          sortOrder: Number(lesson.sortOrder),
+          description: lesson.description || null,
+          startsAt: lesson.startsAt || null,
+          endsAt: lesson.endsAt || null
+        })
+      }, token);
+      setLesson({ ...lesson, title: "", description: "", startsAt: "", endsAt: "", sortOrder: String(Number(lesson.sortOrder) + 1) });
+      setMessage("Lesson saved.");
+      onChange();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save lesson");
+    }
+  }
+
+  async function updateLesson(lessonId: string, changes: Record<string, unknown>) {
+    setMessage("");
+    setError("");
+    try {
+      await api(`/admin/lessons/${lessonId}`, { method: "PUT", body: JSON.stringify(changes) }, token);
+      setMessage("Lesson updated.");
+      onChange();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update lesson");
+    }
+  }
 
   async function createResource() {
     setMessage("");
@@ -1479,7 +1626,14 @@ function AdminTools({ data, token, onChange }: { data: DashboardData; token: str
         await uploadApi("/admin/resources/upload", form, token);
         setFile(null);
       } else {
-        await api("/admin/resources", { method: "POST", body: JSON.stringify(resource) }, token);
+        await api("/admin/resources", {
+          method: "POST",
+          body: JSON.stringify({
+            ...resource,
+            topicId: resource.topicId || null,
+            lessonId: resource.lessonId || null
+          })
+        }, token);
       }
       setResource({ ...resource, title: "", description: "", url: "" });
       setMessage("Resource saved.");
@@ -1493,7 +1647,16 @@ function AdminTools({ data, token, onChange }: { data: DashboardData; token: str
     setMessage("");
     setError("");
     try {
-      await api("/admin/assignments", { method: "POST", body: JSON.stringify({ ...assignment, dueAt: assignment.dueAt || null, wordCountGuidance: assignment.wordCountGuidance || null }) }, token);
+      await api("/admin/assignments", {
+        method: "POST",
+        body: JSON.stringify({
+          ...assignment,
+          dueAt: assignment.dueAt || null,
+          wordCountGuidance: assignment.wordCountGuidance || null,
+          topicId: assignment.topicId || null,
+          lessonId: assignment.lessonId || null
+        })
+      }, token);
       setAssignment({ ...assignment, title: "", instructions: "", wordCountGuidance: "", dueAt: "" });
       setMessage("Assignment saved.");
       onChange();
@@ -1552,6 +1715,8 @@ function AdminTools({ data, token, onChange }: { data: DashboardData; token: str
         type: resource.type,
         accessMode: resource.accessMode,
         levelId: resource.level?.id ?? "",
+        topicId: resource.topic?.id ?? "",
+        lessonId: resource.lesson?.id ?? "",
         url: resource.url ?? "",
         isPublished: resource.isPublished
       }
@@ -1572,6 +1737,8 @@ function AdminTools({ data, token, onChange }: { data: DashboardData; token: str
           type: draft.type,
           accessMode: draft.accessMode,
           levelId: draft.levelId || null,
+          topicId: draft.topicId || null,
+          lessonId: draft.lessonId || null,
           url: draft.url || null,
           isPublished: draft.isPublished
         })
@@ -1600,6 +1767,41 @@ function AdminTools({ data, token, onChange }: { data: DashboardData; token: str
     <>
     <div className="adminGrid">
       <section className="panel">
+        <h3>Curriculum Topics</h3>
+        <div className="form compact">
+          <select value={topic.levelId} onChange={(event) => setTopic({ ...topic, levelId: event.target.value })}>
+            {data.levels.map((level) => <option key={level.id} value={level.id}>{level.gradeBand}</option>)}
+          </select>
+          <input placeholder="Topic title, e.g. Thesis Writing" value={topic.title} onChange={(event) => setTopic({ ...topic, title: event.target.value })} />
+          <textarea placeholder="Topic description" value={topic.description} onChange={(event) => setTopic({ ...topic, description: event.target.value })} />
+          <input placeholder="Sort order" value={topic.sortOrder} onChange={(event) => setTopic({ ...topic, sortOrder: event.target.value })} />
+          <label className="inlineCheck">
+            <input type="checkbox" checked={topic.isPublished} onChange={(event) => setTopic({ ...topic, isPublished: event.target.checked })} />
+            Visible to students
+          </label>
+          <button className="primary" onClick={createTopic}><Plus size={18} /> Add topic</button>
+        </div>
+      </section>
+      <section className="panel">
+        <h3>Lessons / Weeks</h3>
+        <div className="form compact">
+          <select value={lesson.topicId} onChange={(event) => setLesson({ ...lesson, topicId: event.target.value })}>
+            <option value="">Choose topic</option>
+            {data.curriculum.map((item) => <option key={item.id} value={item.id}>{item.level?.gradeBand ?? "Level"} - {item.title}</option>)}
+          </select>
+          <input placeholder="Lesson title, e.g. Week 1: Thesis Basics" value={lesson.title} onChange={(event) => setLesson({ ...lesson, title: event.target.value })} />
+          <textarea placeholder="Lesson description" value={lesson.description} onChange={(event) => setLesson({ ...lesson, description: event.target.value })} />
+          <input placeholder="Sort order" value={lesson.sortOrder} onChange={(event) => setLesson({ ...lesson, sortOrder: event.target.value })} />
+          <input type="date" value={lesson.startsAt} onChange={(event) => setLesson({ ...lesson, startsAt: event.target.value })} />
+          <input type="date" value={lesson.endsAt} onChange={(event) => setLesson({ ...lesson, endsAt: event.target.value })} />
+          <label className="inlineCheck">
+            <input type="checkbox" checked={lesson.isPublished} onChange={(event) => setLesson({ ...lesson, isPublished: event.target.checked })} />
+            Visible to students
+          </label>
+          <button className="primary" onClick={createLesson}><Plus size={18} /> Add lesson</button>
+        </div>
+      </section>
+      <section className="panel">
         <h3>Add Resource</h3>
         <div className="form compact">
           <div className="segmented">
@@ -1624,6 +1826,14 @@ function AdminTools({ data, token, onChange }: { data: DashboardData; token: str
           <select value={resource.levelId} onChange={(event) => setResource({ ...resource, levelId: event.target.value })}>
             {data.levels.map((level) => <option key={level.id} value={level.id}>{level.gradeBand}</option>)}
           </select>
+          <select value={resource.topicId} onChange={(event) => setResource({ ...resource, topicId: event.target.value, lessonId: "" })}>
+            <option value="">No topic</option>
+            {topicsForLevel(resource.levelId).map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
+          </select>
+          <select value={resource.lessonId} onChange={(event) => setResource({ ...resource, lessonId: event.target.value })} disabled={!resource.topicId}>
+            <option value="">No lesson</option>
+            {lessonsForTopic(resource.topicId).map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
+          </select>
           {resourceMode === "file" ? (
             <input type="file" accept=".pdf,.doc,.docx,.pptx,.xlsx,.jpg,.jpeg,.png" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
           ) : (
@@ -1641,6 +1851,14 @@ function AdminTools({ data, token, onChange }: { data: DashboardData; token: str
           <input type="date" value={assignment.dueAt} onChange={(event) => setAssignment({ ...assignment, dueAt: event.target.value })} />
           <select value={assignment.levelId} onChange={(event) => setAssignment({ ...assignment, levelId: event.target.value })}>
             {data.levels.map((level) => <option key={level.id} value={level.id}>{level.gradeBand}</option>)}
+          </select>
+          <select value={assignment.topicId} onChange={(event) => setAssignment({ ...assignment, topicId: event.target.value, lessonId: "" })}>
+            <option value="">No topic</option>
+            {topicsForLevel(assignment.levelId).map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
+          </select>
+          <select value={assignment.lessonId} onChange={(event) => setAssignment({ ...assignment, lessonId: event.target.value })} disabled={!assignment.topicId}>
+            <option value="">No lesson</option>
+            {lessonsForTopic(assignment.topicId).map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
           </select>
           <button className="primary" onClick={createAssignment}><Save size={18} /> Add assignment</button>
         </div>
@@ -1681,6 +1899,38 @@ function AdminTools({ data, token, onChange }: { data: DashboardData; token: str
       )}
     </div>
     <section className="panel adminWide">
+      <h3>Curriculum Map</h3>
+      <div className="curriculumList">
+        {data.curriculum.length === 0 && <p className="empty">No topics yet. Add a topic for each level, then attach lessons, resources, and assignments.</p>}
+        {data.curriculum.map((item) => (
+          <article className="curriculumRow" key={item.id}>
+            <div>
+              <strong>{item.title}</strong>
+              <span>{item.level?.gradeBand ?? "Level"} | {item.lessons.length} lessons</span>
+              {item.description && <p>{item.description}</p>}
+            </div>
+            <div className="statusRow">
+              <small className={item.isPublished ? "statusPill activeStatus" : "statusPill"}>{item.isPublished ? "Visible" : "Hidden"}</small>
+              <button className="secondary" onClick={() => updateTopic(item.id, { isPublished: !item.isPublished })}>
+                {item.isPublished ? "Hide topic" : "Publish topic"}
+              </button>
+            </div>
+            <div className="lessonList">
+              {item.lessons.map((row) => (
+                <div className="lessonRow" key={row.id}>
+                  <span>{row.title}</span>
+                  <small className={row.isPublished ? "statusPill activeStatus" : "statusPill"}>{row.isPublished ? "Visible" : "Hidden"}</small>
+                  <button className="secondary" onClick={() => updateLesson(row.id, { isPublished: !row.isPublished })}>
+                    {row.isPublished ? "Hide" : "Publish"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+    <section className="panel adminWide">
       <h3>Manage Resources</h3>
       <div className="managementList">
         {data.resources.map((item) => {
@@ -1693,6 +1943,8 @@ function AdminTools({ data, token, onChange }: { data: DashboardData; token: str
                 <div className="statusRow">
                   <small className={item.isPublished ? "statusPill activeStatus" : "statusPill"}>{item.isPublished ? "Published" : "Hidden"}</small>
                   <small className="statusPill">{item.accessMode.replace("_", " ")}</small>
+                  {item.topic && <small className="statusPill">{item.topic.title}</small>}
+                  {item.lesson && <small className="statusPill">{item.lesson.title}</small>}
                 </div>
               </div>
               {draft ? (
@@ -1715,6 +1967,14 @@ function AdminTools({ data, token, onChange }: { data: DashboardData; token: str
                   <select value={draft.levelId} onChange={(event) => setResourceDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], levelId: event.target.value } }))}>
                     <option value="">All levels</option>
                     {data.levels.map((level) => <option key={level.id} value={level.id}>{level.gradeBand}</option>)}
+                  </select>
+                  <select value={draft.topicId} onChange={(event) => setResourceDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], topicId: event.target.value, lessonId: "" } }))}>
+                    <option value="">No topic</option>
+                    {topicsForLevel(draft.levelId).map((topic) => <option key={topic.id} value={topic.id}>{topic.title}</option>)}
+                  </select>
+                  <select value={draft.lessonId} onChange={(event) => setResourceDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], lessonId: event.target.value } }))} disabled={!draft.topicId}>
+                    <option value="">No lesson</option>
+                    {lessonsForTopic(draft.topicId).map((lesson) => <option key={lesson.id} value={lesson.id}>{lesson.title}</option>)}
                   </select>
                   <input placeholder="URL, if this is a link resource" value={draft.url} onChange={(event) => setResourceDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], url: event.target.value } }))} />
                   <label className="inlineCheck">

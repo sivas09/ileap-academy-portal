@@ -210,8 +210,20 @@ async function getStudentLevelId(userId: string) {
   return profile?.levelId ?? null;
 }
 
-function canAccessResource(resource: Resource, studentLevelId: string | null, entitlementIds: Set<string>) {
+type CurriculumScoped = {
+  topic?: { id: string; levelId: string; isPublished: boolean } | null;
+  lesson?: { id: string; isPublished: boolean; topic?: { id: string; levelId: string; isPublished: boolean } | null } | null;
+};
+
+function isCurriculumPublished(item: CurriculumScoped) {
+  if (item.lesson) return Boolean(item.lesson.isPublished && item.lesson.topic?.isPublished);
+  if (item.topic) return item.topic.isPublished;
+  return true;
+}
+
+function canAccessResource(resource: Resource & CurriculumScoped, studentLevelId: string | null, entitlementIds: Set<string>) {
   if (!resource.isPublished) return false;
+  if (!isCurriculumPublished(resource)) return false;
   if (resource.accessMode === AccessMode.FREE) return true;
   if (resource.accessMode === AccessMode.LEVEL_ASSIGNED) return Boolean(resource.levelId && resource.levelId === studentLevelId);
   return entitlementIds.has(resource.id);
@@ -234,6 +246,30 @@ function productResourceForClient<T extends { resource: Resource }>(item: T) {
   };
 }
 
+async function validateCurriculumScope(input: { levelId?: string | null; topicId?: string | null; lessonId?: string | null }) {
+  const topicId = input.topicId || null;
+  const lessonId = input.lessonId || null;
+  const levelId = input.levelId || null;
+
+  if (lessonId) {
+    const lesson = await prisma.lesson.findUnique({
+      where: { id: lessonId },
+      include: { topic: true }
+    });
+    if (!lesson) return { error: "Selected lesson does not exist" };
+    if (topicId && topicId !== lesson.topicId) return { error: "Selected lesson does not belong to the selected topic" };
+    if (levelId && lesson.topic.levelId !== levelId) return { error: "Selected lesson does not belong to the selected level" };
+  }
+
+  if (topicId) {
+    const topic = await prisma.topic.findUnique({ where: { id: topicId } });
+    if (!topic) return { error: "Selected topic does not exist" };
+    if (levelId && topic.levelId !== levelId) return { error: "Selected topic does not belong to the selected level" };
+  }
+
+  return { error: null };
+}
+
 function safeDownloadName(resource: Pick<Resource, "title" | "fileKey" | "originalFileName">) {
   const sourceName = resource.originalFileName || resource.title;
   const ext = resource.fileKey ? path.extname(resource.fileKey) : "";
@@ -243,7 +279,10 @@ function safeDownloadName(resource: Pick<Resource, "title" | "fileKey" | "origin
 }
 
 async function assertResourceAccess(resourceId: string, user: AuthUser) {
-  const resource = await prisma.resource.findUnique({ where: { id: resourceId } });
+  const resource = await prisma.resource.findUnique({
+    where: { id: resourceId },
+    include: { topic: true, lesson: { include: { topic: true } } }
+  });
   if (!resource) return null;
   if (user.role === "ADMIN" || user.role === "TEACHER") return resource;
 
@@ -311,6 +350,8 @@ const resourceSchema = z.object({
   url: z.string().url().optional().nullable(),
   fileKey: z.string().optional().nullable(),
   levelId: z.string().optional().nullable(),
+  topicId: z.string().optional().nullable(),
+  lessonId: z.string().optional().nullable(),
   isPublished: z.boolean().default(false)
 });
 
@@ -323,9 +364,29 @@ const assignmentSchema = z.object({
   instructions: z.string().min(10),
   wordCountGuidance: z.string().max(80).optional().nullable(),
   levelId: z.string().min(1),
+  topicId: z.string().optional().nullable(),
+  lessonId: z.string().optional().nullable(),
   isPublished: z.boolean().default(false),
   isArchived: z.boolean().default(false),
   dueAt: z.string().optional().nullable()
+});
+
+const topicSchema = z.object({
+  levelId: z.string().min(1),
+  title: z.string().trim().min(2).max(120),
+  description: z.string().max(500).optional().nullable(),
+  sortOrder: z.coerce.number().int().min(1).default(1),
+  isPublished: z.boolean().default(false)
+});
+
+const lessonSchema = z.object({
+  topicId: z.string().min(1),
+  title: z.string().trim().min(2).max(120),
+  description: z.string().max(500).optional().nullable(),
+  sortOrder: z.coerce.number().int().min(1).default(1),
+  startsAt: z.string().optional().nullable(),
+  endsAt: z.string().optional().nullable(),
+  isPublished: z.boolean().default(false)
 });
 
 const productSchema = z.object({
@@ -424,6 +485,21 @@ app.get("/api/public/products", async (_req, res) => {
   })));
 });
 
+app.get("/api/public/curriculum", async (_req, res) => {
+  const topics = await prisma.topic.findMany({
+    where: { isPublished: true },
+    include: {
+      level: true,
+      lessons: {
+        where: { isPublished: true },
+        orderBy: { sortOrder: "asc" }
+      }
+    },
+    orderBy: [{ level: { sortOrder: "asc" } }, { sortOrder: "asc" }]
+  });
+  res.json(topics);
+});
+
 app.post("/api/auth/signup", async (req, res) => {
   res.status(404).json({ error: "Public student signup is closed. Please contact iLEAP Academy for access." });
 });
@@ -490,11 +566,31 @@ app.get("/api/dashboard", requireAuth, async (req, res) => {
   }
 
   const levels = await prisma.level.findMany({ orderBy: { sortOrder: "asc" } });
+  const studentLevelId = user.role === "STUDENT" ? user.student?.levelId ?? null : null;
+  const teacherLevelIds = user.teacher?.levels.map((item) => item.levelId) ?? [];
+  const curriculumWhere =
+    user.role === "STUDENT"
+      ? { levelId: studentLevelId ?? "", isPublished: true }
+      : user.role === "TEACHER"
+        ? { levelId: { in: teacherLevelIds } }
+        : {};
+  const curriculum = await prisma.topic.findMany({
+    where: curriculumWhere,
+    include: {
+      level: true,
+      lessons: {
+        where: user.role === "STUDENT" ? { isPublished: true } : {},
+        orderBy: { sortOrder: "asc" }
+      }
+    },
+    orderBy: [{ level: { sortOrder: "asc" } }, { sortOrder: "asc" }]
+  });
 
   if (user.status === "PENDING_APPROVAL") {
     res.json({
       user: publicUser(user),
       levels,
+      curriculum,
       resources: [],
       assignments: [],
       products: [],
@@ -508,7 +604,6 @@ app.get("/api/dashboard", requireAuth, async (req, res) => {
     return;
   }
 
-  const studentLevelId = user.role === "STUDENT" ? user.student?.levelId ?? null : null;
   const entitlements = await prisma.entitlement.findMany({
     where: { userId: user.id, isActive: true },
     select: { resourceId: true }
@@ -519,34 +614,35 @@ app.get("/api/dashboard", requireAuth, async (req, res) => {
     user.role === "STUDENT"
       ? { isPublished: true }
       : user.role === "TEACHER"
-        ? { levelId: { in: user.teacher?.levels.map((item) => item.levelId) ?? [] } }
+        ? { levelId: { in: teacherLevelIds } }
         : {};
 
   const allResources = await prisma.resource.findMany({
     where: resourceWhere,
-    include: { level: true },
+    include: { level: true, topic: true, lesson: { include: { topic: true } } },
     orderBy: { createdAt: "desc" }
   });
 
   const resources =
     user.role === "STUDENT"
-      ? allResources.map((resource) => ({
-          ...resourceForClient(resource, canAccessResource(resource, studentLevelId, entitlementIds))
-        }))
+      ? allResources
+          .filter(isCurriculumPublished)
+          .map((resource) => resourceForClient(resource, canAccessResource(resource, studentLevelId, entitlementIds)))
       : allResources.map((resource) => resourceForClient(resource, true));
 
   const assignmentWhere =
     user.role === "STUDENT"
       ? { isPublished: true, isArchived: false, levelId: studentLevelId ?? "" }
       : user.role === "TEACHER"
-        ? { levelId: { in: user.teacher?.levels.map((item) => item.levelId) ?? [] } }
+        ? { levelId: { in: teacherLevelIds } }
         : {};
 
-  const assignments = await prisma.assignment.findMany({
+  const allAssignments = await prisma.assignment.findMany({
     where: assignmentWhere,
-    include: { level: true, _count: { select: { submissions: true } } },
+    include: { level: true, topic: true, lesson: { include: { topic: true } }, _count: { select: { submissions: true } } },
     orderBy: { createdAt: "desc" }
   });
+  const assignments = user.role === "STUDENT" ? allAssignments.filter(isCurriculumPublished) : allAssignments;
 
   const products = await prisma.product.findMany({
     where: { isActive: true },
@@ -569,6 +665,7 @@ app.get("/api/dashboard", requireAuth, async (req, res) => {
   res.json({
     user: publicUser(user),
     levels,
+    curriculum,
     resources,
     assignments,
     products: productsWithPurchaseStatus,
@@ -576,10 +673,215 @@ app.get("/api/dashboard", requireAuth, async (req, res) => {
   });
 });
 
+app.post("/api/admin/topics", requireAuth, requireActiveAccount, requireRole("ADMIN", "TEACHER"), async (req, res) => {
+  const input = topicSchema.safeParse(req.body);
+  if (!input.success) {
+    res.status(400).json({ error: input.error.flatten() });
+    return;
+  }
+
+  if (req.user!.role === "TEACHER") {
+    const teacher = await prisma.teacherProfile.findUnique({ where: { userId: req.user!.id }, include: { levels: true } });
+    const allowedLevelIds = teacher?.levels.map((item) => item.levelId) ?? [];
+    if (!allowedLevelIds.includes(input.data.levelId)) {
+      res.status(403).json({ error: "You cannot create topics for this level" });
+      return;
+    }
+  }
+
+  try {
+    const topic = await prisma.topic.create({
+      data: {
+        ...input.data,
+        description: input.data.description || null
+      },
+      include: { level: true, lessons: true }
+    });
+    await writeAudit(req.user?.id, "CREATE", "Topic", topic.id, { title: topic.title, levelId: topic.levelId });
+    res.status(201).json(topic);
+  } catch (err) {
+    if (isUniqueConstraintError(err)) {
+      res.status(409).json({ error: "A topic with this title already exists for this level." });
+      return;
+    }
+    throw err;
+  }
+});
+
+app.put("/api/admin/topics/:id", requireAuth, requireActiveAccount, requireRole("ADMIN", "TEACHER"), async (req, res) => {
+  const input = topicSchema.partial().safeParse(req.body);
+  if (!input.success) {
+    res.status(400).json({ error: input.error.flatten() });
+    return;
+  }
+
+  const existing = await prisma.topic.findUnique({ where: { id: String(req.params.id) } });
+  if (!existing) {
+    res.status(404).json({ error: "Topic not found" });
+    return;
+  }
+
+  const targetLevelId = input.data.levelId ?? existing.levelId;
+  if (req.user!.role === "TEACHER") {
+    const teacher = await prisma.teacherProfile.findUnique({ where: { userId: req.user!.id }, include: { levels: true } });
+    const allowedLevelIds = teacher?.levels.map((item) => item.levelId) ?? [];
+    if (!allowedLevelIds.includes(existing.levelId) || !allowedLevelIds.includes(targetLevelId)) {
+      res.status(403).json({ error: "You cannot edit this topic level" });
+      return;
+    }
+  }
+
+  const topic = await prisma.topic.update({
+    where: { id: existing.id },
+    data: {
+      title: input.data.title,
+      description: input.data.description === "" ? null : input.data.description,
+      sortOrder: input.data.sortOrder,
+      levelId: input.data.levelId,
+      isPublished: input.data.isPublished
+    },
+    include: { level: true, lessons: { orderBy: { sortOrder: "asc" } } }
+  });
+  await writeAudit(req.user?.id, "UPDATE", "Topic", topic.id, { title: topic.title, isPublished: topic.isPublished });
+  res.json(topic);
+});
+
+app.delete("/api/admin/topics/:id", requireAuth, requireActiveAccount, requireRole("ADMIN"), async (req, res) => {
+  const topic = await prisma.topic.findUnique({
+    where: { id: String(req.params.id) },
+    include: { _count: { select: { resources: true, assignments: true, lessons: true } } }
+  });
+  if (!topic) {
+    res.status(404).json({ error: "Topic not found" });
+    return;
+  }
+  if (topic._count.resources > 0 || topic._count.assignments > 0 || topic._count.lessons > 0) {
+    res.status(409).json({ error: "Move or delete this topic's lessons, resources, and assignments before deleting it." });
+    return;
+  }
+  await prisma.topic.delete({ where: { id: topic.id } });
+  await writeAudit(req.user?.id, "DELETE", "Topic", topic.id, { title: topic.title });
+  res.json({ ok: true });
+});
+
+app.post("/api/admin/lessons", requireAuth, requireActiveAccount, requireRole("ADMIN", "TEACHER"), async (req, res) => {
+  const input = lessonSchema.safeParse(req.body);
+  if (!input.success) {
+    res.status(400).json({ error: input.error.flatten() });
+    return;
+  }
+
+  const topic = await prisma.topic.findUnique({ where: { id: input.data.topicId } });
+  if (!topic) {
+    res.status(400).json({ error: "Selected topic does not exist" });
+    return;
+  }
+  if (req.user!.role === "TEACHER") {
+    const teacher = await prisma.teacherProfile.findUnique({ where: { userId: req.user!.id }, include: { levels: true } });
+    const allowedLevelIds = teacher?.levels.map((item) => item.levelId) ?? [];
+    if (!allowedLevelIds.includes(topic.levelId)) {
+      res.status(403).json({ error: "You cannot create lessons for this topic" });
+      return;
+    }
+  }
+
+  try {
+    const lesson = await prisma.lesson.create({
+      data: {
+        title: input.data.title,
+        description: input.data.description || null,
+        sortOrder: input.data.sortOrder,
+        startsAt: input.data.startsAt ? new Date(input.data.startsAt) : null,
+        endsAt: input.data.endsAt ? new Date(input.data.endsAt) : null,
+        isPublished: input.data.isPublished,
+        topicId: input.data.topicId
+      },
+      include: { topic: { include: { level: true } } }
+    });
+    await writeAudit(req.user?.id, "CREATE", "Lesson", lesson.id, { title: lesson.title, topicId: lesson.topicId });
+    res.status(201).json(lesson);
+  } catch (err) {
+    if (isUniqueConstraintError(err)) {
+      res.status(409).json({ error: "A lesson with this title already exists for this topic." });
+      return;
+    }
+    throw err;
+  }
+});
+
+app.put("/api/admin/lessons/:id", requireAuth, requireActiveAccount, requireRole("ADMIN", "TEACHER"), async (req, res) => {
+  const input = lessonSchema.partial().safeParse(req.body);
+  if (!input.success) {
+    res.status(400).json({ error: input.error.flatten() });
+    return;
+  }
+
+  const existing = await prisma.lesson.findUnique({ where: { id: String(req.params.id) }, include: { topic: true } });
+  if (!existing) {
+    res.status(404).json({ error: "Lesson not found" });
+    return;
+  }
+  const targetTopic = input.data.topicId
+    ? await prisma.topic.findUnique({ where: { id: input.data.topicId } })
+    : existing.topic;
+  if (!targetTopic) {
+    res.status(400).json({ error: "Selected topic does not exist" });
+    return;
+  }
+  if (req.user!.role === "TEACHER") {
+    const teacher = await prisma.teacherProfile.findUnique({ where: { userId: req.user!.id }, include: { levels: true } });
+    const allowedLevelIds = teacher?.levels.map((item) => item.levelId) ?? [];
+    if (!allowedLevelIds.includes(existing.topic.levelId) || !allowedLevelIds.includes(targetTopic.levelId)) {
+      res.status(403).json({ error: "You cannot edit this lesson topic" });
+      return;
+    }
+  }
+
+  const lesson = await prisma.lesson.update({
+    where: { id: existing.id },
+    data: {
+      title: input.data.title,
+      description: input.data.description === "" ? null : input.data.description,
+      sortOrder: input.data.sortOrder,
+      startsAt: input.data.startsAt ? new Date(input.data.startsAt) : input.data.startsAt === null || input.data.startsAt === "" ? null : undefined,
+      endsAt: input.data.endsAt ? new Date(input.data.endsAt) : input.data.endsAt === null || input.data.endsAt === "" ? null : undefined,
+      isPublished: input.data.isPublished,
+      topicId: input.data.topicId
+    },
+    include: { topic: { include: { level: true } } }
+  });
+  await writeAudit(req.user?.id, "UPDATE", "Lesson", lesson.id, { title: lesson.title, isPublished: lesson.isPublished });
+  res.json(lesson);
+});
+
+app.delete("/api/admin/lessons/:id", requireAuth, requireActiveAccount, requireRole("ADMIN"), async (req, res) => {
+  const lesson = await prisma.lesson.findUnique({
+    where: { id: String(req.params.id) },
+    include: { _count: { select: { resources: true, assignments: true } } }
+  });
+  if (!lesson) {
+    res.status(404).json({ error: "Lesson not found" });
+    return;
+  }
+  if (lesson._count.resources > 0 || lesson._count.assignments > 0) {
+    res.status(409).json({ error: "Move or delete this lesson's resources and assignments before deleting it." });
+    return;
+  }
+  await prisma.lesson.delete({ where: { id: lesson.id } });
+  await writeAudit(req.user?.id, "DELETE", "Lesson", lesson.id, { title: lesson.title });
+  res.json({ ok: true });
+});
+
 app.post("/api/admin/resources", requireAuth, requireActiveAccount, requireRole("ADMIN", "TEACHER"), async (req, res) => {
   const input = resourceSchema.safeParse(req.body);
   if (!input.success) {
     res.status(400).json({ error: input.error.flatten() });
+    return;
+  }
+
+  const scope = await validateCurriculumScope(input.data);
+  if (scope.error) {
+    res.status(400).json({ error: scope.error });
     return;
   }
 
@@ -599,11 +901,19 @@ app.post("/api/admin/resources/upload", requireAuth, requireActiveAccount, requi
     ...req.body,
     fileKey: stored.fileKey,
     url: req.body.url || null,
-    levelId: req.body.levelId || null
+    levelId: req.body.levelId || null,
+    topicId: req.body.topicId || null,
+    lessonId: req.body.lessonId || null
   });
 
   if (!input.success) {
     res.status(400).json({ error: input.error.flatten() });
+    return;
+  }
+
+  const scope = await validateCurriculumScope(input.data);
+  if (scope.error) {
+    res.status(400).json({ error: scope.error });
     return;
   }
 
@@ -617,6 +927,8 @@ app.post("/api/admin/resources/upload", requireAuth, requireActiveAccount, requi
       fileKey: input.data.fileKey,
       originalFileName: stored.originalName,
       levelId: input.data.levelId,
+      topicId: input.data.topicId,
+      lessonId: input.data.lessonId,
       isPublished: input.data.isPublished
     }
   });
@@ -657,10 +969,20 @@ app.put("/api/admin/resources/:id", requireAuth, requireActiveAccount, requireRo
     }
   }
 
+  const scope = await validateCurriculumScope({
+    levelId: input.data.levelId ?? resource.levelId,
+    topicId: input.data.topicId ?? resource.topicId,
+    lessonId: input.data.lessonId ?? resource.lessonId
+  });
+  if (scope.error) {
+    res.status(400).json({ error: scope.error });
+    return;
+  }
+
   const updated = await prisma.resource.update({
     where: { id: resource.id },
     data: input.data,
-    include: { level: true }
+    include: { level: true, topic: true, lesson: { include: { topic: true } } }
   });
 
   await writeAudit(req.user?.id, "UPDATE", "Resource", updated.id, {
@@ -729,6 +1051,12 @@ app.post("/api/admin/assignments", requireAuth, requireActiveAccount, requireRol
     return;
   }
 
+  const scope = await validateCurriculumScope(input.data);
+  if (scope.error) {
+    res.status(400).json({ error: scope.error });
+    return;
+  }
+
   const assignment = await prisma.assignment.create({
     data: {
       ...input.data,
@@ -766,6 +1094,16 @@ app.put("/api/admin/assignments/:id", requireAuth, requireActiveAccount, require
     }
   }
 
+  const scope = await validateCurriculumScope({
+    levelId: input.data.levelId ?? assignment.levelId,
+    topicId: input.data.topicId ?? assignment.topicId,
+    lessonId: input.data.lessonId ?? assignment.lessonId
+  });
+  if (scope.error) {
+    res.status(400).json({ error: scope.error });
+    return;
+  }
+
   const updated = await prisma.assignment.update({
     where: { id: assignment.id },
     data: {
@@ -773,11 +1111,13 @@ app.put("/api/admin/assignments/:id", requireAuth, requireActiveAccount, require
       instructions: input.data.instructions,
       wordCountGuidance: input.data.wordCountGuidance === "" ? null : input.data.wordCountGuidance,
       levelId: input.data.levelId,
+      topicId: input.data.topicId,
+      lessonId: input.data.lessonId,
       isPublished: input.data.isPublished,
       isArchived: input.data.isArchived,
       dueAt: input.data.dueAt ? new Date(input.data.dueAt) : input.data.dueAt === null || input.data.dueAt === "" ? null : undefined
     },
-    include: { level: true, _count: { select: { submissions: true } } }
+    include: { level: true, topic: true, lesson: { include: { topic: true } }, _count: { select: { submissions: true } } }
   });
 
   await writeAudit(req.user?.id, "UPDATE", "Assignment", updated.id, { title: updated.title });
@@ -933,8 +1273,11 @@ app.post("/api/student/homework", requireAuth, requireActiveAccount, requireRole
   }
 
   const levelId = await getStudentLevelId(req.user!.id);
-  const assignment = await prisma.assignment.findUnique({ where: { id: input.data.assignmentId } });
-  if (!assignment || !assignment.isPublished || assignment.levelId !== levelId) {
+  const assignment = await prisma.assignment.findUnique({
+    where: { id: input.data.assignmentId },
+    include: { topic: true, lesson: { include: { topic: true } } }
+  });
+  if (!assignment || !assignment.isPublished || !isCurriculumPublished(assignment) || assignment.levelId !== levelId) {
     res.status(403).json({ error: "Assignment is not available for your level" });
     return;
   }
