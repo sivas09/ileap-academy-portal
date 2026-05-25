@@ -432,7 +432,7 @@ const adminCreateUserSchema = z.object({
   email: z.string().email(),
   firstName: z.string().min(1),
   lastName: z.string().min(1),
-  role: z.enum(["STUDENT", "TEACHER"]),
+  role: z.enum(["STUDENT", "TEACHER", "ADMIN"]),
   levelId: z.string().optional().nullable(),
   teacherLevelIds: z.array(z.string()).optional().default([]),
   temporaryPassword: z.string().min(8).optional().default("Member123!")
@@ -441,6 +441,7 @@ const adminCreateUserSchema = z.object({
 const adminUpdateUserSchema = z.object({
   firstName: z.string().min(1).optional(),
   lastName: z.string().min(1).optional(),
+  role: z.enum(["STUDENT", "TEACHER", "ADMIN"]).optional(),
   status: z.enum(["ACTIVE", "DISABLED", "PENDING_APPROVAL"]).optional(),
   levelId: z.string().optional().nullable(),
   teacherLevelIds: z.array(z.string()).optional()
@@ -1477,32 +1478,76 @@ app.put("/api/admin/users/:id", requireAuth, requireActiveAccount, requireRole("
     return;
   }
 
+  const targetRole = input.data.role ?? existing.role;
+  if (targetRole === "STUDENT" && (input.data.role === "STUDENT" || input.data.levelId !== undefined) && !input.data.levelId && !existing.student?.levelId) {
+    res.status(400).json({ error: "Student level is required" });
+    return;
+  }
+
+  if (targetRole === "TEACHER" && (input.data.role === "TEACHER" || input.data.teacherLevelIds !== undefined)) {
+    const targetTeacherLevelIds = input.data.teacherLevelIds ?? [];
+    if (targetTeacherLevelIds.length === 0 && !existing.teacher) {
+      res.status(400).json({ error: "Teacher must be assigned to at least one level" });
+      return;
+    }
+    if (input.data.teacherLevelIds && input.data.teacherLevelIds.length === 0) {
+      res.status(400).json({ error: "Teacher must be assigned to at least one level" });
+      return;
+    }
+  }
+
+  if (userId === req.user!.id && (targetRole !== "ADMIN" || input.data.status && input.data.status !== "ACTIVE")) {
+    res.status(400).json({ error: "You cannot remove your own admin access or disable your own account." });
+    return;
+  }
+
+  const weakensAdminAccess =
+    existing.role === "ADMIN" &&
+    (targetRole !== "ADMIN" || input.data.status === "DISABLED" || input.data.status === "PENDING_APPROVAL");
+  if (weakensAdminAccess) {
+    const otherActiveAdmins = await prisma.user.count({
+      where: { id: { not: userId }, role: "ADMIN", status: "ACTIVE" }
+    });
+    if (otherActiveAdmins === 0) {
+      res.status(400).json({ error: "At least one active admin account must remain." });
+      return;
+    }
+  }
+
   await prisma.$transaction(async (tx) => {
     await tx.user.update({
       where: { id: userId },
       data: {
         firstName: input.data.firstName,
         lastName: input.data.lastName,
+        role: targetRole,
         status: input.data.status
       }
     });
 
-    if (existing.role === "STUDENT" && input.data.levelId) {
+    if (targetRole === "STUDENT") {
+      if (existing.teacher) await tx.teacherProfile.delete({ where: { userId } });
       await tx.studentProfile.upsert({
         where: { userId },
-        update: { levelId: input.data.levelId },
-        create: { userId, levelId: input.data.levelId }
+        update: { levelId: input.data.levelId ?? existing.student?.levelId ?? "" },
+        create: { userId, levelId: input.data.levelId ?? existing.student?.levelId ?? "" }
       });
     }
 
-    if (existing.role === "TEACHER" && input.data.teacherLevelIds) {
+    if (targetRole === "TEACHER") {
+      if (existing.student) await tx.studentProfile.delete({ where: { userId } });
       const teacher = existing.teacher ?? await tx.teacherProfile.create({ data: { userId } });
-      await tx.teacherLevel.deleteMany({ where: { teacherId: teacher.id } });
-      if (input.data.teacherLevelIds.length > 0) {
+      if (input.data.teacherLevelIds) {
+        await tx.teacherLevel.deleteMany({ where: { teacherId: teacher.id } });
         await tx.teacherLevel.createMany({
           data: input.data.teacherLevelIds.map((levelId) => ({ teacherId: teacher.id, levelId }))
         });
       }
+    }
+
+    if (targetRole === "ADMIN") {
+      if (existing.student) await tx.studentProfile.delete({ where: { userId } });
+      if (existing.teacher) await tx.teacherProfile.delete({ where: { userId } });
     }
   });
 
@@ -1512,6 +1557,7 @@ app.put("/api/admin/users/:id", requireAuth, requireActiveAccount, requireRole("
   });
 
   await writeAudit(req.user?.id, "UPDATE", "User", userId, {
+    role: input.data.role,
     status: input.data.status,
     levelId: input.data.levelId,
     teacherLevelIds: input.data.teacherLevelIds

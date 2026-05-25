@@ -1179,6 +1179,23 @@ function UserManager({ levels, token }: { levels: Level[]; token: string }) {
     }
   }
 
+  function changeUserRole(user: AdminUser, role: AdminUser["role"]) {
+    if (role === "STUDENT") {
+      updateUser(user, { role, levelId: user.level?.id ?? levels[0]?.id ?? "" });
+      return;
+    }
+
+    if (role === "TEACHER") {
+      const teacherLevelIds = user.teacherLevels.length > 0
+        ? user.teacherLevels.map((level) => level.id)
+        : levels[0] ? [levels[0].id] : [];
+      updateUser(user, { role, teacherLevelIds });
+      return;
+    }
+
+    updateUser(user, { role });
+  }
+
   async function resetPassword(user: AdminUser) {
     const temporaryPassword = window.prompt(`Temporary password for ${user.email}`, "Member123!");
     if (!temporaryPassword) return;
@@ -1214,6 +1231,7 @@ function UserManager({ levels, token }: { levels: Level[]; token: string }) {
 
   const students = users.filter((user) => user.role === "STUDENT");
   const teachers = users.filter((user) => user.role === "TEACHER");
+  const admins = users.filter((user) => user.role === "ADMIN");
 
   return (
     <div className="userManager">
@@ -1223,6 +1241,7 @@ function UserManager({ levels, token }: { levels: Level[]; token: string }) {
           <select value={draft.role} onChange={(event) => setDraft({ ...draft, role: event.target.value })}>
             <option value="STUDENT">Student</option>
             <option value="TEACHER">Teacher</option>
+            <option value="ADMIN">Admin</option>
           </select>
           <input placeholder="First name" value={draft.firstName} onChange={(event) => setDraft({ ...draft, firstName: event.target.value })} />
           <input placeholder="Last name" value={draft.lastName} onChange={(event) => setDraft({ ...draft, lastName: event.target.value })} />
@@ -1232,7 +1251,7 @@ function UserManager({ levels, token }: { levels: Level[]; token: string }) {
             <select value={draft.levelId} onChange={(event) => setDraft({ ...draft, levelId: event.target.value })}>
               {levels.map((level) => <option key={level.id} value={level.id}>{level.gradeBand}</option>)}
             </select>
-          ) : (
+          ) : draft.role === "TEACHER" ? (
             <div className="resourceChecklist">
               {levels.map((level) => (
                 <label key={level.id}>
@@ -1241,7 +1260,7 @@ function UserManager({ levels, token }: { levels: Level[]; token: string }) {
                 </label>
               ))}
             </div>
-          )}
+          ) : null}
           <button className="primary" onClick={createUser}><Plus size={18} /> Create user</button>
           {message && <p className="success">{message}</p>}
           {error && <div className="error">{error}</div>}
@@ -1260,6 +1279,11 @@ function UserManager({ levels, token }: { levels: Level[]; token: string }) {
                   {statusLabel(user.status)}
                 </small>
               </div>
+              <select value={user.role} onChange={(event) => changeUserRole(user, event.target.value as AdminUser["role"])}>
+                <option value="STUDENT">Student</option>
+                <option value="TEACHER">Teacher</option>
+                <option value="ADMIN">Admin</option>
+              </select>
               <select value={user.level?.id ?? ""} onChange={(event) => updateUser(user, { levelId: event.target.value })}>
                 {levels.map((level) => <option key={level.id} value={level.id}>{level.gradeBand}</option>)}
               </select>
@@ -1289,6 +1313,11 @@ function UserManager({ levels, token }: { levels: Level[]; token: string }) {
                   {statusLabel(user.status)}
                 </small>
               </div>
+              <select value={user.role} onChange={(event) => changeUserRole(user, event.target.value as AdminUser["role"])}>
+                <option value="STUDENT">Student</option>
+                <option value="TEACHER">Teacher</option>
+                <option value="ADMIN">Admin</option>
+              </select>
               <div className="resourceChecklist compactChecklist">
                 {levels.map((level) => (
                   <label key={level.id}>
@@ -1297,6 +1326,32 @@ function UserManager({ levels, token }: { levels: Level[]; token: string }) {
                   </label>
                 ))}
               </div>
+              <button className="secondary" onClick={() => updateUser(user, { status: user.status === "ACTIVE" ? "DISABLED" : "ACTIVE" })}>
+                {user.status === "ACTIVE" ? "Disable" : "Enable"}
+              </button>
+              <button className="secondary" onClick={() => resetPassword(user)}>Reset Password</button>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="panel">
+        <h3>Admins</h3>
+        <div className="userList">
+          {admins.map((user) => (
+            <div className="userRow" key={user.id}>
+              <div>
+                <strong>{user.firstName} {user.lastName}</strong>
+                <span>{user.email}</span>
+                <small className={user.status === "ACTIVE" ? "statusPill activeStatus" : user.status === "PENDING_APPROVAL" ? "statusPill pendingStatus" : "statusPill dangerStatus"}>
+                  {statusLabel(user.status)}
+                </small>
+              </div>
+              <select value={user.role} onChange={(event) => changeUserRole(user, event.target.value as AdminUser["role"])}>
+                <option value="STUDENT">Student</option>
+                <option value="TEACHER">Teacher</option>
+                <option value="ADMIN">Admin</option>
+              </select>
               <button className="secondary" onClick={() => updateUser(user, { status: user.status === "ACTIVE" ? "DISABLED" : "ACTIVE" })}>
                 {user.status === "ACTIVE" ? "Disable" : "Enable"}
               </button>
