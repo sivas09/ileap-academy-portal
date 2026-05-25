@@ -1,15 +1,15 @@
 :root {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: #1f2937;
-  background: #ffeefb;
-  --brand-bg: #ffeefb;
+  background: #f7f9fc;
+  --brand-bg: #f7f9fc;
   --brand-red: #c62828;
   --brand-blue: #00296b;
   --brand-green: #008000;
   --brand-orange: #e6690a;
   --brand-light-blue: #0089ca;
   --surface: #ffffff;
-  --line: #ead7e5;
+  --line: #dbe3ee;
   --muted: #64748b;
   --ink: #1f2937;
   --soft-blue: #e9f6fb;
@@ -26,7 +26,7 @@
 body {
   margin: 0;
   min-width: 320px;
-  background: var(--brand-bg);
+  background: #f7f9fc;
 }
 
 button,
@@ -42,7 +42,8 @@ button {
 
 .publicPage {
   min-height: 100vh;
-  background: var(--brand-bg);
+  background:
+    linear-gradient(180deg, #ffffff 0%, #f7f9fc 44%, #fdf6fb 100%);
 }
 
 .publicNav {
@@ -52,7 +53,8 @@ button {
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid rgba(0, 41, 107, 0.12);
-  background: rgba(255, 238, 251, 0.9);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(14px);
 }
 
 .brand,
@@ -364,6 +366,7 @@ textarea {
 .content {
   padding: 24px;
   overflow: auto;
+  background: #f7f9fc;
 }
 
 .topbar {
@@ -438,7 +441,7 @@ textarea {
 }
 
 .resourceCard.locked {
-  background: #fff9fe;
+  background: #fbfcff;
 }
 
 .assignmentCard {
@@ -610,7 +613,7 @@ textarea {
 .levelPreviewList article {
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fffafd;
+  background: #fbfcff;
   padding: 12px;
 }
 
@@ -686,7 +689,7 @@ textarea {
   gap: 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fffafd;
+  background: #fbfcff;
   padding: 14px;
 }
 
@@ -757,7 +760,7 @@ textarea {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
-  background: #f7edf5;
+  background: #eef4fb;
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 4px;
@@ -785,7 +788,7 @@ textarea {
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 10px;
-  background: #fffafd;
+  background: #fbfcff;
 }
 
 .resourceChecklist label {

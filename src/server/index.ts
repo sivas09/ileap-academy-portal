@@ -181,6 +181,10 @@ async function writeAudit(actorId: string | undefined, action: "CREATE" | "UPDAT
   });
 }
 
+function isUniqueConstraintError(error: unknown) {
+  return Boolean(error && typeof error === "object" && "code" in error && error.code === "P2002");
+}
+
 function publicUser(user: {
   id: string;
   email: string;
@@ -211,6 +215,23 @@ function canAccessResource(resource: Resource, studentLevelId: string | null, en
   if (resource.accessMode === AccessMode.FREE) return true;
   if (resource.accessMode === AccessMode.LEVEL_ASSIGNED) return Boolean(resource.levelId && resource.levelId === studentLevelId);
   return entitlementIds.has(resource.id);
+}
+
+function resourceForClient<T extends Resource>(resource: T, isAccessible: boolean) {
+  return {
+    ...resource,
+    isAccessible,
+    url: isAccessible ? resource.url : null,
+    fileKey: isAccessible ? resource.fileKey : null,
+    originalFileName: isAccessible ? resource.originalFileName : null
+  };
+}
+
+function productResourceForClient<T extends { resource: Resource }>(item: T) {
+  return {
+    ...item,
+    resource: resourceForClient(item.resource, false)
+  };
 }
 
 function safeDownloadName(resource: Pick<Resource, "title" | "fileKey" | "originalFileName">) {
@@ -280,14 +301,6 @@ async function unlockOrderEntitlements(orderId: string) {
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8)
-});
-
-const signupSchema = z.object({
-  email: z.string().email().transform((value) => value.toLowerCase().trim()),
-  password: z.string().min(8),
-  firstName: z.string().trim().min(1),
-  lastName: z.string().trim().min(1),
-  levelId: z.string().min(1)
 });
 
 const resourceSchema = z.object({
@@ -405,48 +418,14 @@ app.get("/api/public/products", async (_req, res) => {
     include: { level: true, resources: { include: { resource: true } } },
     orderBy: { createdAt: "desc" }
   });
-  res.json(products);
+  res.json(products.map((product) => ({
+    ...product,
+    resources: product.resources.map(productResourceForClient)
+  })));
 });
 
 app.post("/api/auth/signup", async (req, res) => {
-  const input = signupSchema.safeParse(req.body);
-  if (!input.success) {
-    res.status(400).json({ error: input.error.flatten() });
-    return;
-  }
-
-  const level = await prisma.level.findUnique({ where: { id: input.data.levelId } });
-  if (!level) {
-    res.status(400).json({ error: "Selected level does not exist" });
-    return;
-  }
-
-  const passwordHash = await bcrypt.hash(input.data.password, 12);
-  try {
-    const user = await prisma.user.create({
-      data: {
-        email: input.data.email,
-        passwordHash,
-        firstName: input.data.firstName,
-        lastName: input.data.lastName,
-        role: "STUDENT",
-        status: "PENDING_APPROVAL",
-        student: { create: { levelId: level.id } }
-      },
-      include: { student: { include: { level: true } } }
-    });
-
-    const authUser = { id: user.id, role: user.role, email: user.email };
-    await writeAudit(user.id, "CREATE", "User", user.id, { source: "student_signup", level: level.code, status: user.status });
-
-    res.status(201).json({ token: signToken(authUser), user: publicUser(user) });
-  } catch (err: any) {
-    if (err?.code === "P2002") {
-      res.status(409).json({ error: "An account with this email already exists." });
-      return;
-    }
-    throw err;
-  }
+  res.status(404).json({ error: "Public student signup is closed. Please contact iLEAP Academy for access." });
 });
 
 app.post("/api/auth/login", async (req, res) => {
@@ -552,10 +531,9 @@ app.get("/api/dashboard", requireAuth, async (req, res) => {
   const resources =
     user.role === "STUDENT"
       ? allResources.map((resource) => ({
-          ...resource,
-          isAccessible: canAccessResource(resource, studentLevelId, entitlementIds)
+          ...resourceForClient(resource, canAccessResource(resource, studentLevelId, entitlementIds))
         }))
-      : allResources.map((resource) => ({ ...resource, isAccessible: true }));
+      : allResources.map((resource) => resourceForClient(resource, true));
 
   const assignmentWhere =
     user.role === "STUDENT"
@@ -577,6 +555,7 @@ app.get("/api/dashboard", requireAuth, async (req, res) => {
   });
   const productsWithPurchaseStatus = products.map((product) => ({
     ...product,
+    resources: product.resources.map(productResourceForClient),
     isPurchased: product.resources.some((item) => entitlementIds.has(item.resourceId))
   }));
 
@@ -995,6 +974,10 @@ app.post("/api/student/submissions", requireAuth, requireActiveAccount, requireR
       res.status(404).json({ error: "Student not found" });
       return;
     }
+    if (targetStudent.status !== AccountStatus.ACTIVE) {
+      res.status(403).json({ error: "This student account is not active." });
+      return;
+    }
 
     if (req.user!.role === "TEACHER") {
       const teacher = await prisma.teacherProfile.findUnique({
@@ -1102,21 +1085,30 @@ app.post("/api/admin/users", requireAuth, requireActiveAccount, requireRole("ADM
     return;
   }
 
-  const passwordHash = await bcrypt.hash(input.data.temporaryPassword, 12);
-  const user = await prisma.user.create({
-    data: {
-      email: input.data.email.toLowerCase(),
-      firstName: input.data.firstName,
-      lastName: input.data.lastName,
-      role: input.data.role,
-      passwordHash,
-      student: input.data.role === "STUDENT" && input.data.levelId ? { create: { levelId: input.data.levelId } } : undefined,
-      teacher: input.data.role === "TEACHER"
-        ? { create: { levels: { create: input.data.teacherLevelIds.map((levelId) => ({ levelId })) } } }
-        : undefined
-    },
-    include: { student: { include: { level: true } }, teacher: { include: { levels: { include: { level: true } } } } }
-  });
+  let user;
+  try {
+    const passwordHash = await bcrypt.hash(input.data.temporaryPassword, 12);
+    user = await prisma.user.create({
+      data: {
+        email: input.data.email.toLowerCase(),
+        firstName: input.data.firstName,
+        lastName: input.data.lastName,
+        role: input.data.role,
+        passwordHash,
+        student: input.data.role === "STUDENT" && input.data.levelId ? { create: { levelId: input.data.levelId } } : undefined,
+        teacher: input.data.role === "TEACHER"
+          ? { create: { levels: { create: input.data.teacherLevelIds.map((levelId) => ({ levelId })) } } }
+          : undefined
+      },
+      include: { student: { include: { level: true } }, teacher: { include: { levels: { include: { level: true } } } } }
+    });
+  } catch (err) {
+    if (isUniqueConstraintError(err)) {
+      res.status(409).json({ error: "A user with this email already exists." });
+      return;
+    }
+    throw err;
+  }
 
   await writeAudit(req.user?.id, "CREATE", "User", user.id, { role: user.role });
   res.status(201).json({
@@ -1195,9 +1187,16 @@ app.post("/api/admin/users/:id/reset-password", requireAuth, requireActiveAccoun
     return;
   }
 
+  const userId = String(req.params.id);
+  const existing = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+  if (!existing) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
   const passwordHash = await bcrypt.hash(input.data.temporaryPassword, 12);
   const user = await prisma.user.update({
-    where: { id: String(req.params.id) },
+    where: { id: userId },
     data: { passwordHash }
   });
 
@@ -1324,6 +1323,7 @@ app.get("/api/review/students", requireAuth, requireActiveAccount, requireRole("
   const users = await prisma.user.findMany({
     where: {
       role: "STUDENT",
+      status: AccountStatus.ACTIVE,
       student: {
         ...(levelId ? { levelId } : {}),
         ...(allowedLevelIds ? { levelId: { in: allowedLevelIds } } : {})

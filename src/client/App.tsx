@@ -153,66 +153,6 @@ function Login({ onLogin, content }: { onLogin: (session: Session) => void; cont
   );
 }
 
-function Signup({ levels, onLogin, content }: { levels: Level[]; onLogin: (session: Session) => void; content: SiteContent }) {
-  const [draft, setDraft] = useState({
-    firstName: "",
-    lastName: "",
-    email: "",
-    password: "Member123!",
-    levelId: ""
-  });
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (!draft.levelId && levels[0]) setDraft((current) => ({ ...current, levelId: levels[0].id }));
-  }, [levels, draft.levelId]);
-
-  async function submit(event: React.FormEvent) {
-    event.preventDefault();
-    setError("");
-    try {
-      onLogin(await api<Session>("/auth/signup", { method: "POST", body: JSON.stringify(draft) }));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Signup failed");
-    }
-  }
-
-  return (
-    <form onSubmit={submit} className="form">
-      <h2>{content.signupTitle}</h2>
-      <div className="splitFields">
-        <label>
-          First name
-          <input value={draft.firstName} onChange={(event) => setDraft({ ...draft, firstName: event.target.value })} />
-        </label>
-        <label>
-          Last name
-          <input value={draft.lastName} onChange={(event) => setDraft({ ...draft, lastName: event.target.value })} />
-        </label>
-      </div>
-      <label>
-        Email
-        <input value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} />
-      </label>
-      <label>
-        Writing level
-        <select value={draft.levelId} onChange={(event) => setDraft({ ...draft, levelId: event.target.value })}>
-          {levels.map((level) => (
-            <option key={level.id} value={level.id}>{level.gradeBand} - {level.name}</option>
-          ))}
-        </select>
-      </label>
-      <label>
-        Password
-        <input type="password" value={draft.password} onChange={(event) => setDraft({ ...draft, password: event.target.value })} />
-      </label>
-      {error && <div className="error">{error}</div>}
-      <button className="primary" type="submit">Create account</button>
-      {content.signupHint && <p className="hint">{content.signupHint}</p>}
-    </form>
-  );
-}
-
 function Shell({
   session,
   view,
@@ -425,17 +365,23 @@ function Resources({ resources, token }: { resources: Resource[]; token: string 
   }
 
   async function openResource(resource: Resource) {
-    if (resource.url && !resource.fileKey) {
-      window.open(resource.url, "_blank", "noopener,noreferrer");
-      return;
-    }
-
     const response = await fetch(`/api/resources/${resource.id}/open`, {
       headers: { Authorization: `Bearer ${token}` }
     });
 
     if (!response.ok) {
       alert("Could not open this resource. Please sign in again or ask an admin to check access.");
+      return;
+    }
+
+    const contentType = response.headers.get("Content-Type") ?? "";
+    if (contentType.includes("application/json")) {
+      const payload = await response.json() as { type?: string; url?: string };
+      if (payload.type === "url" && payload.url) {
+        window.open(payload.url, "_blank", "noopener,noreferrer");
+        return;
+      }
+      alert("This resource link is not available.");
       return;
     }
 
