@@ -134,6 +134,12 @@ export type DashboardData = {
   assignments: Assignment[];
   products: Product[];
   submissions: Submission[];
+  notificationRecipients: Array<{
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+  }>;
 };
 
 export type AiPrompt = {

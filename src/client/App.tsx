@@ -243,7 +243,7 @@ function Portal({ session, view }: { session: Session; view: string }) {
   if (data.user.status === "PENDING_APPROVAL" && view !== "account") return <PendingApproval user={data.user} levels={data.levels} />;
 
   if (view === "resources") return <Resources resources={data.resources} token={session.token} />;
-  if (view === "assignments") return <Assignments assignments={data.assignments} submissions={data.submissions} levels={data.levels} curriculum={data.curriculum} token={session.token} role={session.user.role} onSubmit={refresh} />;
+  if (view === "assignments") return <Assignments assignments={data.assignments} submissions={data.submissions} levels={data.levels} curriculum={data.curriculum} notificationRecipients={data.notificationRecipients} token={session.token} role={session.user.role} onSubmit={refresh} />;
   if (view === "tutor" && session.user.role !== "STUDENT") return <AiTutor token={session.token} assignments={data.assignments} onSubmit={refresh} />;
   if (view === "feedback" && session.user.role === "STUDENT") return <StudentFeedback submissions={data.submissions} />;
   if (view === "shop") return <Shop products={data.products} />;
@@ -457,6 +457,7 @@ function Assignments({
   submissions,
   levels,
   curriculum,
+  notificationRecipients,
   token,
   role,
   onSubmit
@@ -465,6 +466,7 @@ function Assignments({
   submissions: DashboardData["submissions"];
   levels: Level[];
   curriculum: DashboardData["curriculum"];
+  notificationRecipients: DashboardData["notificationRecipients"];
   token: string;
   role: Session["user"]["role"];
   onSubmit: () => void;
@@ -472,6 +474,7 @@ function Assignments({
   const [openId, setOpenId] = useState("");
   const [editId, setEditId] = useState("");
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [notificationRecipientsByAssignment, setNotificationRecipientsByAssignment] = useState<Record<string, string>>({});
   const [editDrafts, setEditDrafts] = useState<Record<string, { title: string; instructions: string; wordCountGuidance: string; levelId: string; topicId: string; lessonId: string; isPublished: boolean; isArchived: boolean; dueAt: string }>>({});
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -487,14 +490,15 @@ function Assignments({
           method: "POST",
           body: JSON.stringify({
             assignmentId: assignment.id,
-            pastedText: drafts[assignment.id] ?? ""
+            pastedText: drafts[assignment.id] ?? "",
+            notificationRecipientEmail: notificationRecipientsByAssignment[assignment.id] || notificationRecipients[0]?.email
           })
         },
         token
       );
       setDrafts((current) => ({ ...current, [assignment.id]: "" }));
       setOpenId("");
-      setMessage("Homework submitted. Your teacher can now review it and add feedback.");
+      setMessage("Homework submitted. iLEAP has been notified.");
       onSubmit();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not submit homework");
@@ -664,6 +668,21 @@ function Assignments({
                         placeholder="Paste your paragraph or essay here..."
                       />
                     </label>
+                    {notificationRecipients.length > 0 && (
+                      <label>
+                        Notify
+                        <select
+                          value={notificationRecipientsByAssignment[assignment.id] || notificationRecipients[0].email}
+                          onChange={(event) => setNotificationRecipientsByAssignment((current) => ({ ...current, [assignment.id]: event.target.value }))}
+                        >
+                          {notificationRecipients.map((recipient) => (
+                            <option key={`${recipient.id}-${recipient.email}`} value={recipient.email}>
+                              {recipient.firstName} {recipient.lastName} ({recipient.email})
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
                     <div className="statusRow">
                       <small className="statusPill">{wordCount(drafts[assignment.id] ?? "")} words</small>
                       <small className="statusPill">{(drafts[assignment.id] ?? "").length}/12,000 characters</small>

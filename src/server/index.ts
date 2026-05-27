@@ -6,6 +6,7 @@ import express from "express";
 import helmet from "helmet";
 import jwt from "jsonwebtoken";
 import multer from "multer";
+import nodemailer from "nodemailer";
 import OpenAI from "openai";
 import path from "path";
 import Stripe from "stripe";
@@ -19,6 +20,7 @@ const jwtSecret = process.env.JWT_SECRET ?? "local-development-secret";
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
 const appUrl = process.env.APP_URL ?? "http://localhost:5174";
+const defaultNotificationEmail = process.env.DEFAULT_SUBMISSION_NOTIFICATION_EMAIL ?? "ileap.academy.icat@gmail.com";
 const defaultSiteContent = {
   heroEyebrow: "English Writing Program for Children",
   heroTitle: "Writing coaching, level-based resources, and teacher-guided feedback in one portal.",
@@ -276,6 +278,63 @@ function safeDownloadName(resource: Pick<Resource, "title" | "fileKey" | "origin
   const hasExtension = path.extname(sourceName).length > 0;
   const filename = hasExtension ? sourceName : `${sourceName}${ext}`;
   return filename.replace(/[<>:"/\\|?*\x00-\x1F]/g, "-").slice(0, 180) || `resource${ext}`;
+}
+
+function getMailTransport() {
+  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) return null;
+
+  return nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: Number(process.env.SMTP_PORT ?? 587),
+    secure: process.env.SMTP_SECURE === "true",
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS
+    }
+  });
+}
+
+async function sendSubmissionNotification(input: {
+  to: string;
+  studentName: string;
+  studentEmail: string;
+  assignmentTitle: string;
+  levelName: string;
+  wordCount: number;
+  submittedText: string;
+}) {
+  const transport = getMailTransport();
+  if (!transport) {
+    console.warn("Submission notification skipped: SMTP_HOST, SMTP_USER, and SMTP_PASS are not configured.");
+    return false;
+  }
+
+  const from = process.env.SMTP_FROM ?? process.env.SMTP_USER;
+  const subject = `New iLEAP submission: ${input.assignmentTitle}`;
+  const preview = input.submittedText.length > 1800 ? `${input.submittedText.slice(0, 1800)}...` : input.submittedText;
+
+  await transport.sendMail({
+    from,
+    to: input.to,
+    replyTo: input.studentEmail,
+    subject,
+    text: [
+      "A student submitted homework in the iLEAP English Writing Portal.",
+      "",
+      `Student: ${input.studentName}`,
+      `Student email: ${input.studentEmail}`,
+      `Assignment: ${input.assignmentTitle}`,
+      `Level: ${input.levelName}`,
+      `Word count: ${input.wordCount}`,
+      "",
+      "Submission preview:",
+      preview,
+      "",
+      `Portal: ${appUrl}`
+    ].join("\n")
+  });
+
+  return true;
 }
 
 async function assertResourceAccess(resourceId: string, user: AuthUser) {
@@ -595,7 +654,8 @@ app.get("/api/dashboard", requireAuth, async (req, res) => {
       resources: [],
       assignments: [],
       products: [],
-      submissions: []
+      submissions: [],
+      notificationRecipients: []
     });
     return;
   }
@@ -662,6 +722,17 @@ app.get("/api/dashboard", requireAuth, async (req, res) => {
     orderBy: { createdAt: "desc" },
     take: user.role === "ADMIN" ? 50 : 10
   });
+  const assignedTeachers = studentLevelId
+    ? await prisma.user.findMany({
+        where: {
+          role: "TEACHER",
+          status: "ACTIVE",
+          teacher: { levels: { some: { levelId: studentLevelId } } }
+        },
+        select: { id: true, email: true, firstName: true, lastName: true },
+        orderBy: [{ firstName: "asc" }, { lastName: "asc" }]
+      })
+    : [];
 
   res.json({
     user: publicUser(user),
@@ -670,7 +741,11 @@ app.get("/api/dashboard", requireAuth, async (req, res) => {
     resources,
     assignments,
     products: productsWithPurchaseStatus,
-    submissions
+    submissions,
+    notificationRecipients: [
+      { id: "office", email: defaultNotificationEmail, firstName: "iLEAP", lastName: "Office" },
+      ...assignedTeachers
+    ]
   });
 });
 
@@ -1266,7 +1341,8 @@ app.post("/api/shop/checkout", requireAuth, requireActiveAccount, requireRole("S
 app.post("/api/student/homework", requireAuth, requireActiveAccount, requireRole("STUDENT"), async (req, res) => {
   const input = z.object({
     assignmentId: z.string().min(1),
-    pastedText: z.string().min(20).max(12000)
+    pastedText: z.string().min(20).max(12000),
+    notificationRecipientEmail: z.string().email().optional().nullable()
   }).safeParse(req.body);
   if (!input.success) {
     res.status(400).json({ error: input.error.flatten() });
@@ -1276,11 +1352,38 @@ app.post("/api/student/homework", requireAuth, requireActiveAccount, requireRole
   const levelId = await getStudentLevelId(req.user!.id);
   const assignment = await prisma.assignment.findUnique({
     where: { id: input.data.assignmentId },
-    include: { topic: true, lesson: { include: { topic: true } } }
+    include: { level: true, topic: true, lesson: { include: { topic: true } } }
   });
   if (!assignment || !assignment.isPublished || !isCurriculumPublished(assignment) || assignment.levelId !== levelId) {
     res.status(403).json({ error: "Assignment is not available for your level" });
     return;
+  }
+
+  const student = await prisma.user.findUnique({
+    where: { id: req.user!.id },
+    select: { email: true, firstName: true, lastName: true }
+  });
+  if (!student) {
+    res.status(404).json({ error: "Student not found" });
+    return;
+  }
+
+  let recipientEmail = defaultNotificationEmail;
+  if (input.data.notificationRecipientEmail && input.data.notificationRecipientEmail !== defaultNotificationEmail) {
+    const teacher = await prisma.user.findFirst({
+      where: {
+        email: input.data.notificationRecipientEmail.toLowerCase(),
+        role: "TEACHER",
+        status: "ACTIVE",
+        teacher: { levels: { some: { levelId: assignment.levelId } } }
+      },
+      select: { email: true }
+    });
+    if (!teacher) {
+      res.status(400).json({ error: "Selected teacher is not assigned to this level" });
+      return;
+    }
+    recipientEmail = teacher.email;
   }
 
   const submission = await prisma.writingSubmission.create({
@@ -1292,8 +1395,27 @@ app.post("/api/student/homework", requireAuth, requireActiveAccount, requireRole
     }
   });
 
-  await writeAudit(req.user?.id, "CREATE", "WritingSubmission", submission.id, { source: "student_homework" });
-  res.status(201).json({ submission });
+  let notificationSent = false;
+  try {
+    notificationSent = await sendSubmissionNotification({
+      to: recipientEmail,
+      studentName: `${student.firstName} ${student.lastName}`,
+      studentEmail: student.email,
+      assignmentTitle: assignment.title,
+      levelName: assignment.level.gradeBand,
+      wordCount: input.data.pastedText.trim().split(/\s+/).filter(Boolean).length,
+      submittedText: input.data.pastedText
+    });
+  } catch (err) {
+    console.error("Submission notification failed", err);
+  }
+
+  await writeAudit(req.user?.id, "CREATE", "WritingSubmission", submission.id, {
+    source: "student_homework",
+    notificationRecipientEmail: recipientEmail,
+    notificationSent
+  });
+  res.status(201).json({ submission, notificationSent });
 });
 
 app.post("/api/student/submissions", requireAuth, requireActiveAccount, requireRole("TEACHER", "ADMIN"), async (req, res) => {
