@@ -61,7 +61,7 @@ export function App() {
 
   return (
     <Shell session={session} view={view} setView={setView} onLogout={() => setSession(null)}>
-      <Portal session={session} view={view} />
+      <Portal session={session} view={view} setView={setView} />
     </Shell>
   );
 }
@@ -221,7 +221,7 @@ function Shell({
   );
 }
 
-function Portal({ session, view }: { session: Session; view: string }) {
+function Portal({ session, view, setView }: { session: Session; view: string; setView: (view: string) => void }) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState("");
 
@@ -244,10 +244,10 @@ function Portal({ session, view }: { session: Session; view: string }) {
 
   if (view === "resources") return <Resources resources={data.resources} token={session.token} />;
   if (view === "assignments") return <Assignments assignments={data.assignments} submissions={data.submissions} levels={data.levels} curriculum={data.curriculum} notificationRecipients={data.notificationRecipients} token={session.token} role={session.user.role} onSubmit={refresh} />;
-  if (view === "tutor" && session.user.role !== "STUDENT") return <AiTutor token={session.token} assignments={data.assignments} onSubmit={refresh} />;
+  if (view === "tutor" && session.user.role !== "STUDENT") return <AiTutor token={session.token} assignments={data.assignments} onSubmit={refresh} onDone={() => setView("dashboard")} />;
   if (view === "feedback" && session.user.role === "STUDENT") return <StudentFeedback submissions={data.submissions} />;
   if (view === "shop") return <Shop products={data.products} />;
-  if (view === "review" && session.user.role !== "STUDENT") return <ReviewSubmissions levels={data.levels} assignments={data.assignments} token={session.token} />;
+  if (view === "review" && session.user.role !== "STUDENT") return <ReviewSubmissions levels={data.levels} assignments={data.assignments} token={session.token} onDone={() => setView("dashboard")} />;
   if (view === "prompts" && session.user.role === "ADMIN") return <PromptManager token={session.token} />;
   if (view === "users" && session.user.role === "ADMIN") return <UserManager levels={data.levels} token={session.token} />;
   if (view === "website" && session.user.role === "ADMIN") return <WebsiteContentManager token={session.token} />;
@@ -736,7 +736,7 @@ function StudentFeedback({ submissions }: { submissions: DashboardData["submissi
   );
 }
 
-function AiTutor({ token, assignments, onSubmit }: { token: string; assignments: Assignment[]; onSubmit: () => void }) {
+function AiTutor({ token, assignments, onSubmit, onDone }: { token: string; assignments: Assignment[]; onSubmit: () => void; onDone: () => void }) {
   const [students, setStudents] = useState<ReviewStudent[]>([]);
   const [studentId, setStudentId] = useState("");
   const [assignmentId, setAssignmentId] = useState(assignments[0]?.id ?? "");
@@ -772,6 +772,7 @@ function AiTutor({ token, assignments, onSubmit }: { token: string; assignments:
         setError(`AI generated fallback feedback because OpenAI returned: ${response.feedback.error}`);
       }
       onSubmit();
+      onDone();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not submit writing");
     } finally {
@@ -895,7 +896,7 @@ function Shop({ products }: { products: DashboardData["products"] }) {
   );
 }
 
-function ReviewSubmissions({ levels, assignments, token }: { levels: Level[]; assignments: Assignment[]; token: string }) {
+function ReviewSubmissions({ levels, assignments, token, onDone }: { levels: Level[]; assignments: Assignment[]; token: string; onDone: () => void }) {
   const [levelId, setLevelId] = useState("");
   const [assignmentId, setAssignmentId] = useState("");
   const [reviewStatus, setReviewStatus] = useState("");
@@ -957,6 +958,7 @@ function ReviewSubmissions({ levels, assignments, token }: { levels: Level[]; as
       );
       setSubmissions((current) => current.map((item) => item.id === updated.id ? updated : item));
       setMessage("Teacher feedback saved.");
+      onDone();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save teacher feedback");
     }
