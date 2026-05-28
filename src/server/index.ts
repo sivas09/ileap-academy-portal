@@ -274,6 +274,33 @@ async function validateCurriculumScope(input: { levelId?: string | null; topicId
   return { error: null };
 }
 
+async function resolveCurriculumLevelId(input: { levelId?: string | null; topicId?: string | null; lessonId?: string | null }) {
+  if (input.levelId) return input.levelId;
+  if (input.lessonId) {
+    const lesson = await prisma.lesson.findUnique({ where: { id: input.lessonId }, include: { topic: true } });
+    return lesson?.topic.levelId ?? null;
+  }
+  if (input.topicId) {
+    const topic = await prisma.topic.findUnique({ where: { id: input.topicId } });
+    return topic?.levelId ?? null;
+  }
+  return null;
+}
+
+async function validateTeacherLevelAccess(user: AuthUser, input: { levelId?: string | null; topicId?: string | null; lessonId?: string | null }) {
+  if (user.role === "ADMIN") return null;
+
+  const levelId = await resolveCurriculumLevelId(input);
+  if (!levelId) return "Teachers must choose one of their assigned levels.";
+
+  const teacher = await prisma.teacherProfile.findUnique({
+    where: { userId: user.id },
+    include: { levels: true }
+  });
+  const allowedLevelIds = teacher?.levels.map((item) => item.levelId) ?? [];
+  return allowedLevelIds.includes(levelId) ? null : "You cannot manage resources for this level.";
+}
+
 function safeDownloadName(resource: Pick<Resource, "title" | "fileKey" | "originalFileName">) {
   const sourceName = resource.originalFileName || resource.title;
   const ext = resource.fileKey ? path.extname(resource.fileKey) : "";
@@ -455,6 +482,16 @@ const resourceSchema = z.object({
 });
 
 const uploadedResourceSchema = resourceSchema.extend({
+  isPublished: z.union([z.boolean(), z.string()]).transform((value) => value === true || value === "true")
+});
+
+const bulkUploadedResourcesSchema = z.object({
+  description: z.string().min(2),
+  type: z.enum(["DOCUMENT", "PDF", "WORKSHEET", "VIDEO_LINK", "BOOK"]),
+  accessMode: z.enum(["FREE", "LEVEL_ASSIGNED"]),
+  levelId: z.string().optional().nullable(),
+  topicId: z.string().optional().nullable(),
+  lessonId: z.string().optional().nullable(),
   isPublished: z.union([z.boolean(), z.string()]).transform((value) => value === true || value === "true")
 });
 
@@ -1087,6 +1124,12 @@ app.post("/api/admin/resources", requireAuth, requireActiveAccount, requireRole(
     return;
   }
 
+  const teacherAccessError = await validateTeacherLevelAccess(req.user!, input.data);
+  if (teacherAccessError) {
+    res.status(403).json({ error: teacherAccessError });
+    return;
+  }
+
   const resource = await prisma.resource.create({ data: input.data });
   await writeAudit(req.user?.id, "CREATE", "Resource", resource.id, { title: resource.title });
   res.status(201).json(resource);
@@ -1119,6 +1162,12 @@ app.post("/api/admin/resources/upload", requireAuth, requireActiveAccount, requi
     return;
   }
 
+  const teacherAccessError = await validateTeacherLevelAccess(req.user!, input.data);
+  if (teacherAccessError) {
+    res.status(403).json({ error: teacherAccessError });
+    return;
+  }
+
   const resource = await prisma.resource.create({
     data: {
       title: input.data.title,
@@ -1143,6 +1192,66 @@ app.post("/api/admin/resources/upload", requireAuth, requireActiveAccount, requi
     size: stored.size
   });
   res.status(201).json(resource);
+});
+
+app.post("/api/admin/resources/bulk-upload", requireAuth, requireActiveAccount, requireRole("ADMIN", "TEACHER"), upload.array("files", 30), async (req, res) => {
+  const files = req.files as Express.Multer.File[] | undefined;
+  if (!files || files.length === 0) {
+    res.status(400).json({ error: "Choose at least one file." });
+    return;
+  }
+
+  const input = bulkUploadedResourcesSchema.safeParse({
+    ...req.body,
+    levelId: req.body.levelId || null,
+    topicId: req.body.topicId || null,
+    lessonId: req.body.lessonId || null
+  });
+  if (!input.success) {
+    res.status(400).json({ error: input.error.flatten() });
+    return;
+  }
+
+  const scope = await validateCurriculumScope(input.data);
+  if (scope.error) {
+    res.status(400).json({ error: scope.error });
+    return;
+  }
+
+  const teacherAccessError = await validateTeacherLevelAccess(req.user!, input.data);
+  if (teacherAccessError) {
+    res.status(403).json({ error: teacherAccessError });
+    return;
+  }
+
+  const created = [];
+  for (const file of files) {
+    const stored = await saveUploadedFile(file);
+    const title = path.basename(stored.originalName, path.extname(stored.originalName)).replace(/[_-]+/g, " ").trim() || stored.originalName;
+    const resource = await prisma.resource.create({
+      data: {
+        title,
+        description: input.data.description,
+        type: input.data.type,
+        accessMode: input.data.accessMode,
+        fileKey: stored.fileKey,
+        originalFileName: stored.originalName,
+        levelId: input.data.levelId,
+        topicId: input.data.topicId,
+        lessonId: input.data.lessonId,
+        isPublished: input.data.isPublished
+      }
+    });
+    created.push(resource);
+    await writeAudit(req.user?.id, "CREATE", "Resource", resource.id, {
+      title: resource.title,
+      fileKey: resource.fileKey,
+      originalName: stored.originalName,
+      bulkUpload: true
+    });
+  }
+
+  res.status(201).json(created);
 });
 
 app.put("/api/admin/resources/:id", requireAuth, requireActiveAccount, requireRole("ADMIN", "TEACHER"), async (req, res) => {

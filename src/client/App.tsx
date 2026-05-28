@@ -1917,6 +1917,16 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
   const [resourceMode, setResourceMode] = useState<"file" | "link">("file");
   const [file, setFile] = useState<File | null>(null);
   const [resourcePriceDollars, setResourcePriceDollars] = useState("29.00");
+  const [bulkFiles, setBulkFiles] = useState<File[]>([]);
+  const [bulkResource, setBulkResource] = useState({
+    description: "Uploaded curriculum material",
+    type: "PDF",
+    accessMode: "LEVEL_ASSIGNED",
+    levelId: data.levels[0]?.id ?? "",
+    topicId: "",
+    lessonId: "",
+    isPublished: true
+  });
   const [assignment, setAssignment] = useState({
     title: "",
     instructions: "",
@@ -2101,6 +2111,27 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
       onResourceSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save resource");
+    }
+  }
+
+  async function bulkUploadResources() {
+    setMessage("");
+    setError("");
+    if (bulkFiles.length === 0) {
+      setError("Choose at least one file for bulk upload.");
+      return;
+    }
+    try {
+      const form = new FormData();
+      bulkFiles.forEach((item) => form.append("files", item));
+      Object.entries(bulkResource).forEach(([key, value]) => form.append(key, String(value)));
+      const created = await uploadApi<Resource[]>("/admin/resources/bulk-upload", form, token);
+      setBulkFiles([]);
+      setMessage(`${created.length} curriculum resources uploaded.`);
+      await onChange();
+      onResourceSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not bulk upload resources");
     }
   }
 
@@ -2420,6 +2451,40 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
             <input placeholder="YouTube or resource URL" value={resource.url} onChange={(event) => setResource({ ...resource, url: event.target.value })} />
           )}
           <button className="primary" onClick={createResource}><Plus size={18} /> Add resource</button>
+        </div>
+      </section>
+      <section className="panel">
+        <h3>Bulk Curriculum Upload</h3>
+        <div className="form compact">
+          <textarea placeholder="Description applied to every uploaded file" value={bulkResource.description} onChange={(event) => setBulkResource({ ...bulkResource, description: event.target.value })} />
+          <select value={bulkResource.type} onChange={(event) => setBulkResource({ ...bulkResource, type: event.target.value })}>
+            <option value="DOCUMENT">Document</option>
+            <option value="PDF">PDF</option>
+            <option value="WORKSHEET">Worksheet</option>
+            <option value="BOOK">Book</option>
+          </select>
+          <select value={bulkResource.accessMode} onChange={(event) => setBulkResource({ ...bulkResource, accessMode: event.target.value })}>
+            <option value="LEVEL_ASSIGNED">Level assigned</option>
+            <option value="FREE">Free</option>
+          </select>
+          <select value={bulkResource.levelId} onChange={(event) => setBulkResource({ ...bulkResource, levelId: event.target.value, topicId: "", lessonId: "" })}>
+            {data.levels.map((level) => <option key={level.id} value={level.id}>{level.gradeBand}</option>)}
+          </select>
+          <select value={bulkResource.topicId} onChange={(event) => setBulkResource({ ...bulkResource, topicId: event.target.value, lessonId: "" })}>
+            <option value="">No topic</option>
+            {topicsForLevel(bulkResource.levelId).map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
+          </select>
+          <select value={bulkResource.lessonId} onChange={(event) => setBulkResource({ ...bulkResource, lessonId: event.target.value })} disabled={!bulkResource.topicId}>
+            <option value="">No lesson</option>
+            {lessonsForTopic(bulkResource.topicId).map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
+          </select>
+          <label className="inlineCheck">
+            <input type="checkbox" checked={bulkResource.isPublished} onChange={(event) => setBulkResource({ ...bulkResource, isPublished: event.target.checked })} />
+            Publish after upload
+          </label>
+          <input type="file" multiple accept=".pdf,.doc,.docx,.pptx,.xlsx,.jpg,.jpeg,.png" onChange={(event) => setBulkFiles(Array.from(event.target.files ?? []))} />
+          {bulkFiles.length > 0 && <small>{bulkFiles.length} files selected</small>}
+          <button className="primary" onClick={bulkUploadResources}><Plus size={18} /> Upload files</button>
         </div>
       </section>
       <section className="panel">
