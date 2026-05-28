@@ -276,7 +276,7 @@ function Portal({ session, view, setView }: { session: Session; view: string; se
   if (view === "prompts" && session.user.role === "ADMIN") return <PromptManager token={session.token} />;
   if (view === "users" && session.user.role === "ADMIN") return <UserManager levels={data.levels} token={session.token} />;
   if (view === "website" && session.user.role === "ADMIN") return <WebsiteContentManager token={session.token} />;
-  if (view === "admin" && session.user.role !== "STUDENT") return <AdminTools data={data} token={session.token} onChange={refresh} onResourceSaved={() => setView("resources")} />;
+  if (view === "admin" && session.user.role !== "STUDENT") return <AdminTools data={data} token={session.token} role={session.user.role} onChange={refresh} onResourceSaved={() => setView("resources")} />;
   if (view === "account") return <AccountSettings token={session.token} />;
 
   return (
@@ -1586,7 +1586,7 @@ type ResourceDraft = {
   isPublished: boolean;
 };
 
-function AdminTools({ data, token, onChange, onResourceSaved }: { data: DashboardData; token: string; onChange: () => Promise<void>; onResourceSaved: () => void }) {
+function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: DashboardData; token: string; role: Session["user"]["role"]; onChange: () => Promise<void>; onResourceSaved: () => void }) {
   const [resource, setResource] = useState({
     title: "",
     description: "",
@@ -1600,6 +1600,7 @@ function AdminTools({ data, token, onChange, onResourceSaved }: { data: Dashboar
   });
   const [resourceMode, setResourceMode] = useState<"file" | "link">("file");
   const [file, setFile] = useState<File | null>(null);
+  const [resourcePriceDollars, setResourcePriceDollars] = useState("29.00");
   const [assignment, setAssignment] = useState({
     title: "",
     instructions: "",
@@ -1721,6 +1722,14 @@ function AdminTools({ data, token, onChange, onResourceSaved }: { data: Dashboar
     setMessage("");
     setError("");
     try {
+      const shouldCreateProduct = role === "ADMIN" && (resource.accessMode === "INDIVIDUAL_PURCHASE" || resource.accessMode === "BUNDLE_PURCHASE");
+      const priceCents = Math.round(Number(resourcePriceDollars) * 100);
+      if (shouldCreateProduct && (!Number.isFinite(priceCents) || priceCents < 50)) {
+        setError("Enter a valid price of at least $0.50 for paid resources.");
+        return;
+      }
+
+      let savedResource: Resource;
       if (resourceMode === "file") {
         if (!file) {
           setError("Choose a file before uploading.");
@@ -1729,10 +1738,10 @@ function AdminTools({ data, token, onChange, onResourceSaved }: { data: Dashboar
         const form = new FormData();
         form.append("file", file);
         Object.entries(resource).forEach(([key, value]) => form.append(key, String(value)));
-        await uploadApi("/admin/resources/upload", form, token);
+        savedResource = await uploadApi<Resource>("/admin/resources/upload", form, token);
         setFile(null);
       } else {
-        await api("/admin/resources", {
+        savedResource = await api<Resource>("/admin/resources", {
           method: "POST",
           body: JSON.stringify({
             ...resource,
@@ -1741,8 +1750,23 @@ function AdminTools({ data, token, onChange, onResourceSaved }: { data: Dashboar
           })
         }, token);
       }
+
+      if (shouldCreateProduct) {
+        await api("/admin/products", {
+          method: "POST",
+          body: JSON.stringify({
+            title: resource.title,
+            description: resource.description,
+            type: resource.accessMode === "BUNDLE_PURCHASE" ? "BUNDLE" : "INDIVIDUAL",
+            priceCents,
+            levelId: resource.levelId || null,
+            resourceIds: [savedResource.id],
+            isActive: true
+          })
+        }, token);
+      }
       setResource({ ...resource, title: "", description: "", url: "" });
-      setMessage("Resource saved.");
+      setMessage(shouldCreateProduct ? "Resource and shop product saved." : "Resource saved.");
       await onChange();
       onResourceSaved();
     } catch (err) {
@@ -1930,6 +1954,13 @@ function AdminTools({ data, token, onChange, onResourceSaved }: { data: Dashboar
             <option value="INDIVIDUAL_PURCHASE">Individual purchase</option>
             <option value="BUNDLE_PURCHASE">Bundle purchase</option>
           </select>
+          {role === "ADMIN" && (resource.accessMode === "INDIVIDUAL_PURCHASE" || resource.accessMode === "BUNDLE_PURCHASE") && (
+            <input
+              placeholder="Price, e.g. 19.00"
+              value={resourcePriceDollars}
+              onChange={(event) => setResourcePriceDollars(event.target.value)}
+            />
+          )}
           <select value={resource.levelId} onChange={(event) => setResource({ ...resource, levelId: event.target.value })}>
             {data.levels.map((level) => <option key={level.id} value={level.id}>{level.gradeBand}</option>)}
           </select>
