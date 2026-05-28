@@ -69,6 +69,7 @@ export function App() {
 function PublicSite({ onLogin }: { onLogin: (session: Session) => void }) {
   const [levels, setLevels] = useState<Level[]>([]);
   const [content, setContent] = useState<SiteContent>(defaultSiteContent);
+  const resetToken = new URLSearchParams(window.location.search).get("resetToken");
 
   useEffect(() => {
     api<Level[]>("/public/levels").then(setLevels).catch(() => setLevels([]));
@@ -100,7 +101,7 @@ function PublicSite({ onLogin }: { onLogin: (session: Session) => void }) {
           </div>
         </div>
         <section className="authCard">
-          <Login onLogin={onLogin} content={content} />
+          {resetToken ? <ResetPassword token={resetToken} /> : <Login onLogin={onLogin} content={content} />}
         </section>
       </section>
 
@@ -123,16 +124,47 @@ function PublicSite({ onLogin }: { onLogin: (session: Session) => void }) {
 function Login({ onLogin, content }: { onLogin: (session: Session) => void; content: SiteContent }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [mode, setMode] = useState<"login" | "forgot">("login");
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setError("");
+    setMessage("");
     try {
       onLogin(await api<Session>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     }
+  }
+
+  async function requestReset(event: React.FormEvent) {
+    event.preventDefault();
+    setError("");
+    setMessage("");
+    try {
+      await api("/auth/forgot-password", { method: "POST", body: JSON.stringify({ email }) });
+      setMessage("If that email exists, a reset link has been sent.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not send reset link");
+    }
+  }
+
+  if (mode === "forgot") {
+    return (
+      <form onSubmit={requestReset} className="form">
+        <h2>Reset Password</h2>
+        <label>
+          Email
+          <input value={email} onChange={(event) => setEmail(event.target.value)} />
+        </label>
+        {message && <p className="success">{message}</p>}
+        {error && <div className="error">{error}</div>}
+        <button className="primary" type="submit">Send reset link</button>
+        <button className="secondary" type="button" onClick={() => setMode("login")}>Back to sign in</button>
+      </form>
+    );
   }
 
   return (
@@ -148,7 +180,52 @@ function Login({ onLogin, content }: { onLogin: (session: Session) => void; cont
       </label>
       {error && <div className="error">{error}</div>}
       <button className="primary" type="submit">Sign in</button>
+      <button className="secondary" type="button" onClick={() => setMode("forgot")}>Forgot password?</button>
       <p className="hint">{content.loginHint}</p>
+    </form>
+  );
+}
+
+function ResetPassword({ token }: { token: string }) {
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    setMessage("");
+    setError("");
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+    try {
+      await api("/auth/reset-password", { method: "POST", body: JSON.stringify({ token, password }) });
+      window.history.replaceState({}, "", window.location.pathname);
+      setMessage("Password reset. You can sign in with your new password.");
+      setPassword("");
+      setConfirmPassword("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not reset password");
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="form">
+      <h2>Create New Password</h2>
+      <label>
+        New password
+        <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
+      </label>
+      <label>
+        Confirm password
+        <input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} />
+      </label>
+      {message && <p className="success">{message}</p>}
+      {error && <div className="error">{error}</div>}
+      <button className="primary" type="submit" disabled={password.length < 8 || confirmPassword.length < 8}>Reset password</button>
+      {message && <button className="secondary" type="button" onClick={() => window.location.reload()}>Go to sign in</button>}
     </form>
   );
 }

@@ -2,6 +2,7 @@ import "dotenv/config";
 import { AccessMode, AccountStatus, PrismaClient, Resource, Role } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import cors from "cors";
+import crypto from "crypto";
 import express from "express";
 import helmet from "helmet";
 import jwt from "jsonwebtoken";
@@ -295,6 +296,35 @@ function getMailTransport() {
   });
 }
 
+function hashResetToken(token: string) {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+async function sendPasswordResetEmail(input: { to: string; name: string; resetUrl: string }) {
+  const transport = getMailTransport();
+  if (!transport) {
+    console.warn("Password reset email skipped: SMTP_HOST, SMTP_USER, and SMTP_PASS are not configured.");
+    return false;
+  }
+
+  await transport.sendMail({
+    from: process.env.SMTP_FROM ?? process.env.SMTP_USER,
+    to: input.to,
+    subject: "Reset your iLEAP Academy portal password",
+    text: [
+      `Hello ${input.name},`,
+      "",
+      "Use this link to reset your iLEAP Academy portal password. It expires in 1 hour and can be used only once.",
+      "",
+      input.resetUrl,
+      "",
+      "If you did not request this, you can ignore this email."
+    ].join("\n")
+  });
+
+  return true;
+}
+
 async function sendSubmissionNotification(input: {
   to: string;
   studentName: string;
@@ -399,6 +429,15 @@ async function unlockOrderEntitlements(orderId: string) {
 
 const loginSchema = z.object({
   email: z.string().email(),
+  password: z.string().min(8)
+});
+
+const forgotPasswordSchema = z.object({
+  email: z.string().email()
+});
+
+const resetPasswordSchema = z.object({
+  token: z.string().min(20),
   password: z.string().min(8)
 });
 
@@ -590,6 +629,63 @@ app.post("/api/auth/login", async (req, res) => {
   await writeAudit(user.id, "LOGIN", "User", user.id);
 
   res.json({ token: signToken(authUser), user: publicUser(user) });
+});
+
+app.post("/api/auth/forgot-password", async (req, res) => {
+  const input = forgotPasswordSchema.safeParse(req.body);
+  if (!input.success) {
+    res.status(400).json({ error: input.error.flatten() });
+    return;
+  }
+
+  const user = await prisma.user.findUnique({ where: { email: input.data.email.toLowerCase() } });
+  if (user && user.status !== "DISABLED") {
+    const token = crypto.randomBytes(32).toString("hex");
+    await prisma.passwordResetToken.create({
+      data: {
+        userId: user.id,
+        tokenHash: hashResetToken(token),
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000)
+      }
+    });
+    await sendPasswordResetEmail({
+      to: user.email,
+      name: `${user.firstName} ${user.lastName}`,
+      resetUrl: `${appUrl}/?resetToken=${encodeURIComponent(token)}`
+    });
+    await writeAudit(undefined, "UPDATE", "User", user.id, { forgotPassword: true });
+  }
+
+  res.json({ ok: true });
+});
+
+app.post("/api/auth/reset-password", async (req, res) => {
+  const input = resetPasswordSchema.safeParse(req.body);
+  if (!input.success) {
+    res.status(400).json({ error: input.error.flatten() });
+    return;
+  }
+
+  const resetToken = await prisma.passwordResetToken.findUnique({
+    where: { tokenHash: hashResetToken(input.data.token) },
+    include: { user: true }
+  });
+  if (!resetToken || resetToken.usedAt || resetToken.expiresAt < new Date() || resetToken.user.status === "DISABLED") {
+    res.status(400).json({ error: "This reset link is invalid or expired." });
+    return;
+  }
+
+  const passwordHash = await bcrypt.hash(input.data.password, 12);
+  await prisma.$transaction([
+    prisma.user.update({ where: { id: resetToken.userId }, data: { passwordHash } }),
+    prisma.passwordResetToken.update({ where: { id: resetToken.id }, data: { usedAt: new Date() } }),
+    prisma.passwordResetToken.updateMany({
+      where: { userId: resetToken.userId, usedAt: null, id: { not: resetToken.id } },
+      data: { usedAt: new Date() }
+    })
+  ]);
+  await writeAudit(undefined, "UPDATE", "User", resetToken.userId, { resetPassword: true });
+  res.json({ ok: true });
 });
 
 app.get("/api/me", requireAuth, async (req, res) => {
