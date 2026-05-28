@@ -276,7 +276,7 @@ function Portal({ session, view, setView }: { session: Session; view: string; se
   if (view === "prompts" && session.user.role === "ADMIN") return <PromptManager token={session.token} />;
   if (view === "users" && session.user.role === "ADMIN") return <UserManager levels={data.levels} token={session.token} />;
   if (view === "website" && session.user.role === "ADMIN") return <WebsiteContentManager token={session.token} />;
-  if (view === "admin" && session.user.role !== "STUDENT") return <AdminTools data={data} token={session.token} onChange={refresh} />;
+  if (view === "admin" && session.user.role !== "STUDENT") return <AdminTools data={data} token={session.token} onChange={refresh} onResourceSaved={() => setView("resources")} />;
   if (view === "account") return <AccountSettings token={session.token} />;
 
   return (
@@ -1586,7 +1586,7 @@ type ResourceDraft = {
   isPublished: boolean;
 };
 
-function AdminTools({ data, token, onChange }: { data: DashboardData; token: string; onChange: () => void }) {
+function AdminTools({ data, token, onChange, onResourceSaved }: { data: DashboardData; token: string; onChange: () => Promise<void>; onResourceSaved: () => void }) {
   const [resource, setResource] = useState({
     title: "",
     description: "",
@@ -1743,7 +1743,8 @@ function AdminTools({ data, token, onChange }: { data: DashboardData; token: str
       }
       setResource({ ...resource, title: "", description: "", url: "" });
       setMessage("Resource saved.");
-      onChange();
+      await onChange();
+      onResourceSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save resource");
     }
