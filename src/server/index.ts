@@ -1288,6 +1288,18 @@ app.post("/api/shop/checkout", requireAuth, requireActiveAccount, requireRole("S
     return;
   }
 
+  const existingEntitlement = await prisma.entitlement.findFirst({
+    where: {
+      userId: req.user!.id,
+      isActive: true,
+      resourceId: { in: product.resources.map((item) => item.resourceId) }
+    }
+  });
+  if (existingEntitlement) {
+    res.status(409).json({ error: "You already have access to this product." });
+    return;
+  }
+
   const order = await prisma.order.create({
     data: {
       userId: req.user!.id,
@@ -1325,7 +1337,7 @@ app.post("/api/shop/checkout", requireAuth, requireActiveAccount, requireRole("S
       userId: req.user!.id,
       productId: product.id
     },
-    success_url: `${appUrl}/?checkout=success`,
+    success_url: `${appUrl}/?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${appUrl}/?checkout=cancelled`
   });
 
@@ -1336,6 +1348,48 @@ app.post("/api/shop/checkout", requireAuth, requireActiveAccount, requireRole("S
   await writeAudit(req.user?.id, "CREATE", "Order", order.id, { productId: product.id, checkoutSession: session.id });
 
   res.status(201).json({ checkoutUrl: session.url, orderId: order.id });
+});
+
+app.post("/api/shop/checkout/confirm", requireAuth, requireActiveAccount, requireRole("STUDENT", "ADMIN"), async (req, res) => {
+  const input = z.object({ sessionId: z.string().min(1) }).safeParse(req.body);
+  if (!input.success) {
+    res.status(400).json({ error: input.error.flatten() });
+    return;
+  }
+
+  if (!stripe) {
+    res.status(503).json({ error: "Stripe is not configured. Add STRIPE_SECRET_KEY to the server environment." });
+    return;
+  }
+
+  const session = await stripe.checkout.sessions.retrieve(input.data.sessionId);
+  const orderId = session.metadata?.orderId;
+  const userId = session.metadata?.userId;
+  if (!orderId || userId !== req.user!.id) {
+    res.status(403).json({ error: "This checkout session does not belong to your account." });
+    return;
+  }
+
+  const order = await prisma.order.findUnique({ where: { id: orderId } });
+  if (!order || order.userId !== req.user!.id) {
+    res.status(404).json({ error: "Order not found." });
+    return;
+  }
+
+  if (session.payment_status !== "paid") {
+    res.status(409).json({ error: "Payment is not complete yet." });
+    return;
+  }
+
+  await prisma.order.update({
+    where: { id: order.id },
+    data: {
+      stripeCheckoutSession: session.id,
+      stripePaymentIntent: typeof session.payment_intent === "string" ? session.payment_intent : null
+    }
+  });
+  await unlockOrderEntitlements(order.id);
+  res.json({ ok: true });
 });
 
 app.post("/api/student/homework", requireAuth, requireActiveAccount, requireRole("STUDENT"), async (req, res) => {

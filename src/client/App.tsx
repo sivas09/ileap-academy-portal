@@ -224,6 +224,7 @@ function Shell({
 function Portal({ session, view, setView }: { session: Session; view: string; setView: (view: string) => void }) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
 
   async function refresh() {
     setError("");
@@ -235,7 +236,31 @@ function Portal({ session, view, setView }: { session: Session; view: string; se
   }
 
   useEffect(() => {
-    refresh();
+    async function load() {
+      const params = new URLSearchParams(window.location.search);
+      const checkout = params.get("checkout");
+      const sessionId = params.get("session_id");
+
+      if (checkout === "success" && sessionId) {
+        try {
+          await api("/shop/checkout/confirm", { method: "POST", body: JSON.stringify({ sessionId }) }, session.token);
+          setNotice("Payment complete. Your purchased resources are now unlocked.");
+        } catch (err) {
+          setNotice(err instanceof Error ? err.message : "Could not confirm payment");
+        } finally {
+          window.history.replaceState({}, "", window.location.pathname);
+        }
+      }
+
+      if (checkout === "cancelled") {
+        setNotice("Checkout was cancelled. No payment was made.");
+        window.history.replaceState({}, "", window.location.pathname);
+      }
+
+      await refresh();
+    }
+
+    load();
   }, []);
 
   if (error) return <div className="error">{error}</div>;
@@ -254,7 +279,12 @@ function Portal({ session, view, setView }: { session: Session; view: string; se
   if (view === "admin" && session.user.role !== "STUDENT") return <AdminTools data={data} token={session.token} onChange={refresh} />;
   if (view === "account") return <AccountSettings token={session.token} />;
 
-  return <Dashboard data={data} />;
+  return (
+    <>
+      {notice && <p className="success">{notice}</p>}
+      <Dashboard data={data} />
+    </>
+  );
 }
 
 function PendingApproval({ user, levels }: { user: Session["user"]; levels: Level[] }) {
