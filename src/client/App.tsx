@@ -16,7 +16,7 @@ import {
   UserRound,
   Video
 } from "lucide-react";
-import { AdminUser, AiPrompt, api, Assignment, DashboardData, Level, money, Resource, ReviewStudent, ReviewSubmission, Session, SiteContent, uploadApi } from "./api";
+import { AdminUser, AiPrompt, api, Assignment, DashboardData, Level, money, OrderHistory, Product, Resource, ReviewStudent, ReviewSubmission, Session, SiteContent, uploadApi } from "./api";
 
 type NavItem = [string, React.ComponentType<{ size?: number }>, string];
 
@@ -271,7 +271,7 @@ function Portal({ session, view, setView }: { session: Session; view: string; se
   if (view === "assignments") return <Assignments assignments={data.assignments} submissions={data.submissions} levels={data.levels} curriculum={data.curriculum} notificationRecipients={data.notificationRecipients} token={session.token} role={session.user.role} onSubmit={refresh} />;
   if (view === "tutor" && session.user.role !== "STUDENT") return <AiTutor token={session.token} assignments={data.assignments} onSubmit={refresh} onDone={() => setView("dashboard")} />;
   if (view === "feedback" && session.user.role === "STUDENT") return <StudentFeedback submissions={data.submissions} />;
-  if (view === "shop") return <Shop products={data.products} />;
+  if (view === "shop") return <Shop products={data.products} token={session.token} />;
   if (view === "review" && session.user.role !== "STUDENT") return <ReviewSubmissions levels={data.levels} assignments={data.assignments} token={session.token} onDone={() => setView("dashboard")} />;
   if (view === "prompts" && session.user.role === "ADMIN") return <PromptManager token={session.token} />;
   if (view === "users" && session.user.role === "ADMIN") return <UserManager levels={data.levels} token={session.token} />;
@@ -917,15 +917,18 @@ function FeedbackView({ feedback }: { feedback: any }) {
   );
 }
 
-function Shop({ products }: { products: DashboardData["products"] }) {
+function Shop({ products, token }: { products: DashboardData["products"]; token: string }) {
   const [message, setMessage] = useState("");
-  const session = JSON.parse(localStorage.getItem("portal.session") ?? "null") as Session | null;
+  const [orders, setOrders] = useState<OrderHistory[]>([]);
+
+  useEffect(() => {
+    api<OrderHistory[]>("/shop/orders", {}, token).then(setOrders).catch(() => setOrders([]));
+  }, [token]);
 
   async function checkout(productId: string) {
     setMessage("");
-    if (!session) return;
     try {
-      const response = await api<{ checkoutUrl: string }>("/shop/checkout", { method: "POST", body: JSON.stringify({ productId }) }, session.token);
+      const response = await api<{ checkoutUrl: string }>("/shop/checkout", { method: "POST", body: JSON.stringify({ productId }) }, token);
       window.location.href = response.checkoutUrl;
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Could not start checkout");
@@ -956,6 +959,21 @@ function Shop({ products }: { products: DashboardData["products"] }) {
           </article>
         ))}
       </div>
+      <section className="panel adminWide">
+        <h3>Purchase History</h3>
+        <div className="managementList">
+          {orders.length === 0 && <p className="empty">No purchases yet.</p>}
+          {orders.map((order) => (
+            <div className="historyRow" key={order.id}>
+              <div>
+                <strong>{order.items.map((item) => item.titleSnapshot).join(", ")}</strong>
+                <span>{new Date(order.createdAt).toLocaleDateString()} | {order.status}</span>
+              </div>
+              <div className="priceSmall">{money(order.totalCents)}</div>
+            </div>
+          ))}
+        </div>
+      </section>
     </>
   );
 }
@@ -1623,6 +1641,16 @@ type ResourceDraft = {
   productActive: boolean;
 };
 
+type ProductDraft = {
+  title: string;
+  description: string;
+  type: Product["type"];
+  priceDollars: string;
+  levelId: string;
+  resourceIds: string[];
+  isActive: boolean;
+};
+
 function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: DashboardData; token: string; role: Session["user"]["role"]; onChange: () => Promise<void>; onResourceSaved: () => void }) {
   const [resource, setResource] = useState({
     title: "",
@@ -1674,8 +1702,22 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
     isActive: true
   });
   const [resourceDrafts, setResourceDrafts] = useState<Record<string, ResourceDraft>>({});
+  const [productDrafts, setProductDrafts] = useState<Record<string, ProductDraft>>({});
+  const [orders, setOrders] = useState<OrderHistory[]>([]);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+
+  async function loadOrders() {
+    try {
+      setOrders(await api<OrderHistory[]>("/admin/orders", {}, token));
+    } catch {
+      setOrders([]);
+    }
+  }
+
+  useEffect(() => {
+    if (role === "ADMIN") loadOrders();
+  }, [token, role]);
 
   function topicsForLevel(levelId: string) {
     return data.curriculum.filter((item) => item.levelId === levelId);
@@ -1860,8 +1902,74 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
       setProduct({ ...product, title: "", description: "", resourceIds: [] });
       setMessage("Product saved.");
       onChange();
+      loadOrders();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save product");
+    }
+  }
+
+  function ensureProductDraft(product: Product) {
+    setProductDrafts((current) => ({
+      ...current,
+      [product.id]: current[product.id] ?? {
+        title: product.title,
+        description: product.description,
+        type: product.type,
+        priceDollars: (product.priceCents / 100).toFixed(2),
+        levelId: product.level?.id ?? "",
+        resourceIds: product.resources?.map((item) => item.resource.id) ?? [],
+        isActive: product.isActive
+      }
+    }));
+  }
+
+  function toggleDraftProductResource(productId: string, resourceId: string) {
+    setProductDrafts((current) => {
+      const draft = current[productId];
+      if (!draft) return current;
+      return {
+        ...current,
+        [productId]: {
+          ...draft,
+          resourceIds: draft.resourceIds.includes(resourceId)
+            ? draft.resourceIds.filter((id) => id !== resourceId)
+            : [...draft.resourceIds, resourceId]
+        }
+      };
+    });
+  }
+
+  async function updateProduct(productId: string) {
+    const draft = productDrafts[productId];
+    if (!draft) return;
+    const priceCents = Math.round(Number(draft.priceDollars) * 100);
+    if (!Number.isFinite(priceCents) || priceCents < 50) {
+      setError("Enter a valid product price of at least $0.50.");
+      return;
+    }
+    if (draft.resourceIds.length === 0) {
+      setError("Select at least one resource for this product.");
+      return;
+    }
+    setMessage("");
+    setError("");
+    try {
+      await api(`/admin/products/${productId}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          title: draft.title,
+          description: draft.description,
+          type: draft.type,
+          priceCents,
+          levelId: draft.levelId || null,
+          resourceIds: draft.resourceIds,
+          isActive: draft.isActive
+        })
+      }, token);
+      setMessage("Product updated.");
+      onChange();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update product");
     }
   }
 
@@ -2223,6 +2331,83 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
         })}
       </div>
     </section>
+    {role === "ADMIN" && (
+      <section className="panel adminWide">
+        <h3>Manage Products</h3>
+        <div className="managementList">
+          {data.products.length === 0 && <p className="empty">No products yet.</p>}
+          {data.products.map((item) => {
+            const draft = productDrafts[item.id];
+            return (
+              <article className="managementRow" key={item.id} onMouseEnter={() => ensureProductDraft(item)}>
+                <div>
+                  <strong>{item.title}</strong>
+                  <span>{item.level?.gradeBand ?? "All levels"} | {item.type} | {money(item.priceCents)}</span>
+                  <div className="statusRow">
+                    <small className={item.isActive ? "statusPill activeStatus" : "statusPill dangerStatus"}>{item.isActive ? "Active" : "Inactive"}</small>
+                    {item.resources?.map((row) => <small className="statusPill" key={row.resource.id}>{row.resource.title}</small>)}
+                  </div>
+                </div>
+                {draft ? (
+                  <div className="managementEditor">
+                    <input value={draft.title} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], title: event.target.value } }))} />
+                    <textarea value={draft.description} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], description: event.target.value } }))} />
+                    <select value={draft.type} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], type: event.target.value as Product["type"] } }))}>
+                      <option value="INDIVIDUAL">Individual</option>
+                      <option value="BUNDLE">Bundle</option>
+                    </select>
+                    <input value={draft.priceDollars} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], priceDollars: event.target.value } }))} />
+                    <select value={draft.levelId} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], levelId: event.target.value } }))}>
+                      <option value="">All levels</option>
+                      {data.levels.map((level) => <option key={level.id} value={level.id}>{level.gradeBand}</option>)}
+                    </select>
+                    <div className="resourceChecklist">
+                      {data.resources.map((resource) => (
+                        <label key={resource.id}>
+                          <input type="checkbox" checked={draft.resourceIds.includes(resource.id)} onChange={() => toggleDraftProductResource(item.id, resource.id)} />
+                          <span>{resource.title}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <label className="inlineCheck">
+                      <input type="checkbox" checked={draft.isActive} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], isActive: event.target.checked } }))} />
+                      Active in shop
+                    </label>
+                    <div className="buttonRow">
+                      <button className="primary" onClick={() => updateProduct(item.id)}><Save size={18} /> Save product</button>
+                    </div>
+                  </div>
+                ) : (
+                  <button className="secondary" onClick={() => ensureProductDraft(item)}>Edit product</button>
+                )}
+              </article>
+            );
+          })}
+        </div>
+      </section>
+    )}
+    {role === "ADMIN" && (
+      <section className="panel adminWide">
+        <h3>Purchase History</h3>
+        <div className="managementList">
+          {orders.length === 0 && <p className="empty">No orders yet.</p>}
+          {orders.map((order) => (
+            <div className="historyRow" key={order.id}>
+              <div>
+                <strong>{order.items.map((item) => item.titleSnapshot).join(", ")}</strong>
+                <span>{order.user ? `${order.user.firstName} ${order.user.lastName} | ${order.user.email}` : "Student"} | {new Date(order.createdAt).toLocaleString()}</span>
+                <div className="statusRow">
+                  <small className={order.status === "PAID" ? "statusPill activeStatus" : order.status === "PENDING" ? "statusPill pendingStatus" : "statusPill dangerStatus"}>{order.status}</small>
+                  {order.user?.student?.level && <small className="statusPill">{order.user.student.level.gradeBand}</small>}
+                  {order.stripeCheckoutSession && <small className="statusPill">{order.stripeCheckoutSession}</small>}
+                </div>
+              </div>
+              <div className="priceSmall">{money(order.totalCents)}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+    )}
     </>
   );
 }

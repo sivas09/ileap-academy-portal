@@ -568,6 +568,13 @@ textarea {
   font-weight: 900;
 }
 
+.priceSmall {
+  color: var(--brand-green);
+  font-size: 18px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
 .compact {
   gap: 10px;
 }
@@ -918,6 +925,24 @@ textarea {
   padding: 14px;
 }
 
+.historyRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 14px;
+}
+
+.historyRow span {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .managementRow span {
   display: block;
   margin: 4px 0 8px;
@@ -955,6 +980,7 @@ small {
   .userManager,
   .curriculumRow,
   .lessonRow,
+  .historyRow,
   .managementRow,
   .managementEditor,
   .cardGrid,

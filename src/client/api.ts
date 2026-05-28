@@ -90,6 +90,30 @@ export type Product = {
   resources?: Array<{ resource: Resource }>;
 };
 
+export type OrderHistory = {
+  id: string;
+  status: "PENDING" | "PAID" | "FAILED" | "REFUNDED";
+  totalCents: number;
+  currency: string;
+  stripeCheckoutSession?: string | null;
+  stripePaymentIntent?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  user?: {
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    student?: { level: Level } | null;
+  };
+  items: Array<{
+    id: string;
+    titleSnapshot: string;
+    priceCentsSnapshot: number;
+    product?: Product;
+  }>;
+};
+
 export type Submission = {
   id: string;
   pastedText: string;

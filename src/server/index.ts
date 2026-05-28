@@ -1323,6 +1323,18 @@ app.put("/api/admin/products/:id", requireAuth, requireActiveAccount, requireRol
   res.json(product);
 });
 
+app.get("/api/admin/orders", requireAuth, requireActiveAccount, requireRole("ADMIN"), async (_req, res) => {
+  const orders = await prisma.order.findMany({
+    include: {
+      user: { select: { id: true, email: true, firstName: true, lastName: true, student: { include: { level: true } } } },
+      items: { include: { product: { include: { level: true, resources: { include: { resource: true } } } } } }
+    },
+    orderBy: { createdAt: "desc" },
+    take: 200
+  });
+  res.json(orders);
+});
+
 app.post("/api/shop/checkout", requireAuth, requireActiveAccount, requireRole("STUDENT", "ADMIN"), async (req, res) => {
   const input = z.object({ productId: z.string() }).safeParse(req.body);
   if (!input.success) {
@@ -1456,6 +1468,18 @@ app.post("/api/shop/checkout/confirm", requireAuth, requireActiveAccount, requir
   });
   await unlockOrderEntitlements(order.id);
   res.json({ ok: true });
+});
+
+app.get("/api/shop/orders", requireAuth, requireActiveAccount, requireRole("STUDENT", "ADMIN"), async (req, res) => {
+  const orders = await prisma.order.findMany({
+    where: { userId: req.user!.id },
+    include: {
+      items: { include: { product: { include: { level: true, resources: { include: { resource: true } } } } } }
+    },
+    orderBy: { createdAt: "desc" },
+    take: 50
+  });
+  res.json(orders);
 });
 
 app.post("/api/student/homework", requireAuth, requireActiveAccount, requireRole("STUDENT"), async (req, res) => {
