@@ -459,6 +459,10 @@ const productSchema = z.object({
   isActive: z.boolean().default(true)
 });
 
+const productUpdateSchema = productSchema.partial().extend({
+  resourceIds: z.array(z.string()).min(1).optional()
+});
+
 const submissionSchema = z.object({
   studentId: z.string().optional(),
   assignmentId: z.string().optional().nullable(),
@@ -1265,6 +1269,51 @@ app.post("/api/admin/products", requireAuth, requireActiveAccount, requireRole("
 
   await writeAudit(req.user?.id, "CREATE", "Product", product.id, { title: product.title, priceCents: product.priceCents });
   res.status(201).json(product);
+});
+
+app.put("/api/admin/products/:id", requireAuth, requireActiveAccount, requireRole("ADMIN"), async (req, res) => {
+  const input = productUpdateSchema.safeParse(req.body);
+  if (!input.success) {
+    res.status(400).json({ error: input.error.flatten() });
+    return;
+  }
+
+  const existing = await prisma.product.findUnique({ where: { id: String(req.params.id) } });
+  if (!existing) {
+    res.status(404).json({ error: "Product not found" });
+    return;
+  }
+
+  if (input.data.resourceIds) {
+    const resources = await prisma.resource.findMany({ where: { id: { in: input.data.resourceIds } } });
+    if (resources.length !== input.data.resourceIds.length) {
+      res.status(400).json({ error: "One or more selected resources do not exist" });
+      return;
+    }
+  }
+
+  const product = await prisma.product.update({
+    where: { id: existing.id },
+    data: {
+      title: input.data.title,
+      description: input.data.description,
+      type: input.data.type,
+      priceCents: input.data.priceCents,
+      currency: input.data.currency?.toLowerCase(),
+      levelId: input.data.levelId,
+      isActive: input.data.isActive,
+      resources: input.data.resourceIds
+        ? {
+            deleteMany: {},
+            create: input.data.resourceIds.map((resourceId) => ({ resourceId }))
+          }
+        : undefined
+    },
+    include: { level: true, resources: { include: { resource: true } } }
+  });
+
+  await writeAudit(req.user?.id, "UPDATE", "Product", product.id, { title: product.title, priceCents: product.priceCents });
+  res.json(product);
 });
 
 app.post("/api/shop/checkout", requireAuth, requireActiveAccount, requireRole("STUDENT", "ADMIN"), async (req, res) => {

@@ -1584,6 +1584,9 @@ type ResourceDraft = {
   lessonId: string;
   url: string;
   isPublished: boolean;
+  productId: string;
+  priceDollars: string;
+  productActive: boolean;
 };
 
 function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: DashboardData; token: string; role: Session["user"]["role"]; onChange: () => Promise<void>; onResourceSaved: () => void }) {
@@ -1837,7 +1840,12 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
     }));
   }
 
+  function productForResource(resourceId: string) {
+    return data.products.find((item) => item.resources?.some((row) => row.resource.id === resourceId));
+  }
+
   function ensureResourceDraft(resource: Resource) {
+    const linkedProduct = productForResource(resource.id);
     setResourceDrafts((current) => ({
       ...current,
       [resource.id]: current[resource.id] ?? {
@@ -1849,7 +1857,10 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
         topicId: resource.topic?.id ?? "",
         lessonId: resource.lesson?.id ?? "",
         url: resource.url ?? "",
-        isPublished: resource.isPublished
+        isPublished: resource.isPublished,
+        productId: linkedProduct?.id ?? "",
+        priceDollars: linkedProduct ? String((linkedProduct.priceCents / 100).toFixed(2)) : "",
+        productActive: linkedProduct?.isActive ?? true
       }
     }));
   }
@@ -1860,6 +1871,13 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
     setMessage("");
     setError("");
     try {
+      const shouldHaveProduct = role === "ADMIN" && (draft.accessMode === "INDIVIDUAL_PURCHASE" || draft.accessMode === "BUNDLE_PURCHASE");
+      const priceCents = Math.round(Number(draft.priceDollars) * 100);
+      if (shouldHaveProduct && (!Number.isFinite(priceCents) || priceCents < 50)) {
+        setError("Enter a valid price of at least $0.50 for paid resources.");
+        return;
+      }
+
       await api(`/admin/resources/${resource.id}`, {
         method: "PUT",
         body: JSON.stringify({
@@ -1874,7 +1892,38 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
           isPublished: draft.isPublished
         })
       }, token);
-      setMessage("Resource updated.");
+
+      if (shouldHaveProduct) {
+        if (draft.productId) {
+          await api(`/admin/products/${draft.productId}`, {
+            method: "PUT",
+            body: JSON.stringify({
+              title: draft.title,
+              description: draft.description,
+              type: draft.accessMode === "BUNDLE_PURCHASE" ? "BUNDLE" : "INDIVIDUAL",
+              priceCents,
+              levelId: draft.levelId || null,
+              resourceIds: [resource.id],
+              isActive: draft.productActive
+            })
+          }, token);
+        } else {
+          await api("/admin/products", {
+            method: "POST",
+            body: JSON.stringify({
+              title: draft.title,
+              description: draft.description,
+              type: draft.accessMode === "BUNDLE_PURCHASE" ? "BUNDLE" : "INDIVIDUAL",
+              priceCents,
+              levelId: draft.levelId || null,
+              resourceIds: [resource.id],
+              isActive: true
+            })
+          }, token);
+        }
+      }
+
+      setMessage(shouldHaveProduct ? "Resource and price updated." : "Resource updated.");
       onChange();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update resource");
@@ -2102,6 +2151,13 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
                     <option value="INDIVIDUAL_PURCHASE">Individual purchase</option>
                     <option value="BUNDLE_PURCHASE">Bundle purchase</option>
                   </select>
+                  {role === "ADMIN" && (draft.accessMode === "INDIVIDUAL_PURCHASE" || draft.accessMode === "BUNDLE_PURCHASE") && (
+                    <input
+                      placeholder="Price, e.g. 19.00"
+                      value={draft.priceDollars}
+                      onChange={(event) => setResourceDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], priceDollars: event.target.value } }))}
+                    />
+                  )}
                   <select value={draft.levelId} onChange={(event) => setResourceDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], levelId: event.target.value } }))}>
                     <option value="">All levels</option>
                     {data.levels.map((level) => <option key={level.id} value={level.id}>{level.gradeBand}</option>)}
