@@ -655,6 +655,7 @@ app.get("/api/dashboard", requireAuth, async (req, res) => {
     res.json({
       user: publicUser(user),
       levels,
+      teacherLevels: user.teacher?.levels.map((item) => item.level) ?? [],
       curriculum,
       resources: [],
       assignments: [],
@@ -727,11 +728,28 @@ app.get("/api/dashboard", requireAuth, async (req, res) => {
     isPurchased: product.resources.some((item) => entitlementIds.has(item.resourceId))
   }));
 
+  const submissionWhere =
+    user.role === "STUDENT"
+      ? { studentId: user.id }
+      : user.role === "TEACHER"
+        ? {
+            OR: [
+              { levelId: { in: teacherLevelIds } },
+              { assignment: { levelId: { in: teacherLevelIds } } }
+            ]
+          }
+        : {};
   const submissions = await prisma.writingSubmission.findMany({
-    where: user.role === "STUDENT" ? { studentId: user.id } : {},
-    include: { assignment: true, feedback: true },
+    where: submissionWhere,
+    include: {
+      assignment: { include: { level: true, topic: true, lesson: { include: { topic: true } } } },
+      feedback: true,
+      student: user.role === "STUDENT"
+        ? false
+        : { select: { id: true, firstName: true, lastName: true, email: true, student: { include: { level: true } } } }
+    },
     orderBy: { createdAt: "desc" },
-    take: user.role === "ADMIN" ? 50 : 10
+    take: user.role === "STUDENT" ? 10 : 50
   });
   const assignedTeachers = studentLevelId
     ? await prisma.user.findMany({
@@ -748,6 +766,7 @@ app.get("/api/dashboard", requireAuth, async (req, res) => {
   res.json({
     user: publicUser(user),
     levels,
+    teacherLevels: user.teacher?.levels.map((item) => item.level) ?? [],
     curriculum,
     resources,
     assignments,

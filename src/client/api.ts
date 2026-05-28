@@ -153,11 +153,12 @@ export type ReviewStudent = {
 export type DashboardData = {
   user: Session["user"];
   levels: Level[];
+  teacherLevels: Level[];
   curriculum: Topic[];
   resources: Resource[];
   assignments: Assignment[];
   products: Product[];
-  submissions: Submission[];
+  submissions: Array<Submission | ReviewSubmission>;
   notificationRecipients: Array<{
     id: string;
     email: string;

@@ -282,7 +282,7 @@ function Portal({ session, view, setView }: { session: Session; view: string; se
   return (
     <>
       {notice && <p className="success">{notice}</p>}
-      <Dashboard data={data} />
+      <Dashboard data={data} setView={setView} />
     </>
   );
 }
@@ -342,7 +342,9 @@ function PendingApproval({ user, levels }: { user: Session["user"]; levels: Leve
   );
 }
 
-function Dashboard({ data }: { data: DashboardData }) {
+function Dashboard({ data, setView }: { data: DashboardData; setView: (view: string) => void }) {
+  if (data.user.role === "TEACHER") return <TeacherDashboard data={data} setView={setView} />;
+
   const accessible = data.resources.filter((resource) => resource.isAccessible).length;
   const locked = data.resources.filter((resource) => !resource.isAccessible).length;
 
@@ -390,6 +392,81 @@ function Dashboard({ data }: { data: DashboardData }) {
           <div className="stackItem" key={submission.id}>
             <strong>{submission.assignment?.title ?? "Writing practice"}</strong>
             <span>{new Date(submission.createdAt).toLocaleDateString()}</span>
+          </div>
+        ))}
+      </section>
+    </div>
+  );
+}
+
+function TeacherDashboard({ data, setView }: { data: DashboardData; setView: (view: string) => void }) {
+  const submissions = data.submissions.filter((submission): submission is ReviewSubmission => "student" in submission);
+  const needsTeacher = submissions.filter((submission) => !submission.teacherFeedback);
+  const needsAi = submissions.filter((submission) => !submission.feedback);
+  const activeAssignments = data.assignments.filter((assignment) => assignment.isPublished && !assignment.isArchived);
+  const assignedLevelNames = data.teacherLevels.map((level) => level.gradeBand).join(", ") || "No assigned levels";
+
+  return (
+    <div className="grid">
+      <div className="metric"><span>Assigned levels</span><strong>{data.teacherLevels.length}</strong></div>
+      <div className="metric accentBlue"><span>Needs teacher review</span><strong>{needsTeacher.length}</strong></div>
+      <div className="metric accentGreen"><span>Active assignments</span><strong>{activeAssignments.length}</strong></div>
+
+      <section className="panel wide">
+        <h3>Teacher Workspace</h3>
+        <p className="lead">Review student submissions, manage level materials, and run AI feedback for assigned classes.</p>
+        <div className="actionRow">
+          <span>{assignedLevelNames}</span>
+          <span>{data.resources.length} resources</span>
+          <span>{data.curriculum.length} topics</span>
+        </div>
+        <div className="buttonRow">
+          <button className="primary" onClick={() => setView("review")}><ClipboardEdit size={18} /> Review submissions</button>
+          <button className="secondary" onClick={() => setView("tutor")}><Sparkles size={18} /> AI Tutor</button>
+          <button className="secondary" onClick={() => setView("admin")}><Shield size={18} /> Manage materials</button>
+        </div>
+      </section>
+
+      <section className="panel">
+        <h3>Review Queue</h3>
+        {needsTeacher.length === 0 && <p className="empty">No submissions need teacher feedback.</p>}
+        {needsTeacher.slice(0, 5).map((submission) => (
+          <div className="stackItem" key={submission.id}>
+            <strong>{submission.student.firstName} {submission.student.lastName}</strong>
+            <span>{submission.assignment?.title ?? "Writing practice"} | {new Date(submission.createdAt).toLocaleDateString()}</span>
+          </div>
+        ))}
+      </section>
+
+      <section className="panel">
+        <h3>AI Queue</h3>
+        {needsAi.length === 0 && <p className="empty">All recent submissions have AI feedback.</p>}
+        {needsAi.slice(0, 5).map((submission) => (
+          <div className="stackItem" key={submission.id}>
+            <strong>{submission.student.firstName} {submission.student.lastName}</strong>
+            <span>{submission.assignment?.title ?? "Writing practice"}</span>
+          </div>
+        ))}
+      </section>
+
+      <section className="panel">
+        <h3>Current Topics</h3>
+        {data.curriculum.length === 0 && <p className="empty">No topics assigned yet.</p>}
+        {data.curriculum.slice(0, 5).map((topic) => (
+          <div className="stackItem" key={topic.id}>
+            <strong>{topic.title}</strong>
+            <span>{topic.level?.gradeBand ?? "Level"} | {topic.lessons.length} lessons</span>
+          </div>
+        ))}
+      </section>
+
+      <section className="panel">
+        <h3>Assignments</h3>
+        {activeAssignments.length === 0 && <p className="empty">No active assignments yet.</p>}
+        {activeAssignments.slice(0, 5).map((assignment) => (
+          <div className="stackItem" key={assignment.id}>
+            <strong>{assignment.title}</strong>
+            <span>{assignment.level.gradeBand}{assignment._count ? ` | ${assignment._count.submissions} submissions` : ""}</span>
           </div>
         ))}
       </section>
