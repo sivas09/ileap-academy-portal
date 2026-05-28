@@ -226,6 +226,7 @@ function isCurriculumPublished(item: CurriculumScoped) {
 function canAccessResource(resource: Resource & CurriculumScoped, studentLevelId: string | null, entitlementIds: Set<string>) {
   if (!resource.isPublished) return false;
   if (!isCurriculumPublished(resource)) return false;
+  if (resource.levelId && resource.levelId !== studentLevelId) return false;
   if (resource.accessMode === AccessMode.FREE) return true;
   if (resource.accessMode === AccessMode.LEVEL_ASSIGNED) return Boolean(resource.levelId && resource.levelId === studentLevelId);
   return entitlementIds.has(resource.id);
@@ -677,7 +678,7 @@ app.get("/api/dashboard", requireAuth, async (req, res) => {
 
   const resourceWhere =
     user.role === "STUDENT"
-      ? { isPublished: true }
+      ? { isPublished: true, OR: [{ levelId: null }, { levelId: studentLevelId ?? "" }] }
       : user.role === "TEACHER"
         ? { levelId: { in: teacherLevelIds } }
         : {};
@@ -709,8 +710,14 @@ app.get("/api/dashboard", requireAuth, async (req, res) => {
   });
   const assignments = user.role === "STUDENT" ? allAssignments.filter(isCurriculumPublished) : allAssignments;
 
+  const productWhere =
+    user.role === "ADMIN"
+      ? {}
+      : user.role === "STUDENT"
+        ? { isActive: true, OR: [{ levelId: null }, { levelId: studentLevelId ?? "" }] }
+        : { isActive: true, OR: [{ levelId: null }, { levelId: { in: teacherLevelIds } }] };
   const products = await prisma.product.findMany({
-    where: { isActive: true },
+    where: productWhere,
     include: { level: true, resources: { include: { resource: true } } },
     orderBy: { createdAt: "desc" }
   });
@@ -1337,14 +1344,24 @@ app.post("/api/shop/checkout", requireAuth, requireActiveAccount, requireRole("S
     return;
   }
 
-  const existingEntitlement = await prisma.entitlement.findFirst({
+  if (req.user!.role === "STUDENT") {
+    const studentLevelId = await getStudentLevelId(req.user!.id);
+    if (product.levelId && product.levelId !== studentLevelId) {
+      res.status(403).json({ error: "This product is not available for your level." });
+      return;
+    }
+  }
+
+  const existingEntitlements = await prisma.entitlement.findMany({
     where: {
       userId: req.user!.id,
       isActive: true,
       resourceId: { in: product.resources.map((item) => item.resourceId) }
-    }
+    },
+    select: { resourceId: true }
   });
-  if (existingEntitlement) {
+  const existingResourceIds = new Set(existingEntitlements.map((item) => item.resourceId));
+  if (product.resources.length > 0 && product.resources.every((item) => existingResourceIds.has(item.resourceId))) {
     res.status(409).json({ error: "You already have access to this product." });
     return;
   }

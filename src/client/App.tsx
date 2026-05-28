@@ -457,6 +457,7 @@ function Resources({ resources, products, token }: { resources: Resource[]; prod
     <>
       {message && <div className="error">{message}</div>}
       <div className="cardGrid">
+        {resources.length === 0 && <section className="panel wide"><p className="empty">No resources are available for your level yet.</p></section>}
         {resources.map((resource) => {
           const product = productForResource(resource.id);
           return (
@@ -474,11 +475,17 @@ function Resources({ resources, products, token }: { resources: Resource[]; prod
               {resource.isAccessible ? (
                 <button className="secondary" onClick={() => openResource(resource)}>{resource.fileKey ? "Download resource" : "Open resource"}</button>
               ) : product ? (
-                <button className="primary" onClick={() => checkout(product.id)}>
-                  <ShoppingCart size={18} /> Buy {money(product.priceCents)}
-                </button>
+                <div className="purchaseBox">
+                  <div>
+                    <span>One-time purchase</span>
+                    <strong>{money(product.priceCents)}</strong>
+                  </div>
+                  <button className="primary" onClick={() => checkout(product.id)}>
+                    <ShoppingCart size={18} /> Buy now
+                  </button>
+                </div>
               ) : (
-                <div className="lockedNote"><Lock size={16} /> Purchase required</div>
+                <div className="lockedNote"><Lock size={16} /> Purchase setup pending</div>
               )}
             </article>
           );
@@ -929,6 +936,7 @@ function Shop({ products }: { products: DashboardData["products"] }) {
     <>
       {message && <div className="error">{message}</div>}
       <div className="cardGrid">
+        {products.length === 0 && <section className="panel wide"><p className="empty">No shop products are available for your level yet.</p></section>}
         {products.map((product) => (
           <article className="resourceCard product" key={product.id}>
             <strong>{product.title}</strong>
