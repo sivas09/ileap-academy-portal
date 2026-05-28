@@ -267,7 +267,7 @@ function Portal({ session, view, setView }: { session: Session; view: string; se
   if (!data) return <div className="empty">Loading portal data...</div>;
   if (data.user.status === "PENDING_APPROVAL" && view !== "account") return <PendingApproval user={data.user} levels={data.levels} />;
 
-  if (view === "resources") return <Resources resources={data.resources} token={session.token} />;
+  if (view === "resources") return <Resources resources={data.resources} products={data.products} token={session.token} />;
   if (view === "assignments") return <Assignments assignments={data.assignments} submissions={data.submissions} levels={data.levels} curriculum={data.curriculum} notificationRecipients={data.notificationRecipients} token={session.token} role={session.user.role} onSubmit={refresh} />;
   if (view === "tutor" && session.user.role !== "STUDENT") return <AiTutor token={session.token} assignments={data.assignments} onSubmit={refresh} onDone={() => setView("dashboard")} />;
   if (view === "feedback" && session.user.role === "STUDENT") return <StudentFeedback submissions={data.submissions} />;
@@ -397,12 +397,28 @@ function Dashboard({ data }: { data: DashboardData }) {
   );
 }
 
-function Resources({ resources, token }: { resources: Resource[]; token: string }) {
+function Resources({ resources, products, token }: { resources: Resource[]; products: DashboardData["products"]; token: string }) {
+  const [message, setMessage] = useState("");
+
   function filenameFromDisposition(disposition: string | null, fallback: string) {
     const utfMatch = disposition?.match(/filename\*=UTF-8''([^;]+)/i);
     if (utfMatch?.[1]) return decodeURIComponent(utfMatch[1]);
     const match = disposition?.match(/filename="?([^"]+)"?/i);
     return match?.[1] ?? fallback;
+  }
+
+  function productForResource(resourceId: string) {
+    return products.find((product) => product.resources?.some((item) => item.resource.id === resourceId));
+  }
+
+  async function checkout(productId: string) {
+    setMessage("");
+    try {
+      const response = await api<{ checkoutUrl: string }>("/shop/checkout", { method: "POST", body: JSON.stringify({ productId }) }, token);
+      window.location.href = response.checkoutUrl;
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Could not start checkout");
+    }
   }
 
   async function openResource(resource: Resource) {
@@ -438,27 +454,37 @@ function Resources({ resources, token }: { resources: Resource[]; token: string 
   }
 
   return (
-    <div className="cardGrid">
-      {resources.map((resource) => (
-        <article className={resource.isAccessible ? "resourceCard" : "resourceCard locked"} key={resource.id}>
-          <div className="cardIcon">{iconForResource(resource)}</div>
-          <strong>{resource.title}</strong>
-          <span>{resource.level?.gradeBand ?? "All levels"} | {resource.type.replace("_", " ")}</span>
-          {(resource.topic || resource.lesson) && (
-            <div className="statusRow">
-              {resource.topic && <small className="statusPill">{resource.topic.title}</small>}
-              {resource.lesson && <small className="statusPill">{resource.lesson.title}</small>}
-            </div>
-          )}
-          <p>{resource.description}</p>
-          {resource.isAccessible ? (
-            <button className="secondary" onClick={() => openResource(resource)}>{resource.fileKey ? "Download resource" : "Open resource"}</button>
-          ) : (
-            <div className="lockedNote"><Lock size={16} /> Purchase required</div>
-          )}
-        </article>
-      ))}
-    </div>
+    <>
+      {message && <div className="error">{message}</div>}
+      <div className="cardGrid">
+        {resources.map((resource) => {
+          const product = productForResource(resource.id);
+          return (
+            <article className={resource.isAccessible ? "resourceCard" : "resourceCard locked"} key={resource.id}>
+              <div className="cardIcon">{iconForResource(resource)}</div>
+              <strong>{resource.title}</strong>
+              <span>{resource.level?.gradeBand ?? "All levels"} | {resource.type.replace("_", " ")}</span>
+              {(resource.topic || resource.lesson) && (
+                <div className="statusRow">
+                  {resource.topic && <small className="statusPill">{resource.topic.title}</small>}
+                  {resource.lesson && <small className="statusPill">{resource.lesson.title}</small>}
+                </div>
+              )}
+              <p>{resource.description}</p>
+              {resource.isAccessible ? (
+                <button className="secondary" onClick={() => openResource(resource)}>{resource.fileKey ? "Download resource" : "Open resource"}</button>
+              ) : product ? (
+                <button className="primary" onClick={() => checkout(product.id)}>
+                  <ShoppingCart size={18} /> Buy {money(product.priceCents)}
+                </button>
+              ) : (
+                <div className="lockedNote"><Lock size={16} /> Purchase required</div>
+              )}
+            </article>
+          );
+        })}
+      </div>
+    </>
   );
 }
 
