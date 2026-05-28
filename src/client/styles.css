@@ -209,6 +209,114 @@ button {
   color: var(--brand-blue);
 }
 
+.programBand,
+.publicSection,
+.faqBand,
+.contactBand {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 44px 28px;
+}
+
+.programBand,
+.splitSection,
+.contactBand {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 28px;
+  align-items: center;
+}
+
+.programBand h2,
+.publicSection h2,
+.faqBand h2,
+.contactBand h2 {
+  margin: 8px 0 10px;
+  color: var(--brand-blue);
+  font-size: 32px;
+  line-height: 1.12;
+}
+
+.programBand p,
+.publicSection p,
+.faqBand p,
+.contactBand p {
+  color: #415164;
+  line-height: 1.58;
+}
+
+.programSteps,
+.featureGrid,
+.faqGrid,
+.infoList {
+  display: grid;
+  gap: 14px;
+}
+
+.programSteps article,
+.featureGrid article,
+.faqGrid article,
+.infoList span {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.programSteps article {
+  display: grid;
+  grid-template-columns: 42px 1fr;
+  align-items: center;
+  gap: 12px;
+}
+
+.programSteps strong {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--soft-blue);
+  color: var(--brand-blue);
+}
+
+.programSteps span,
+.infoList span {
+  color: var(--brand-blue);
+  font-weight: 800;
+}
+
+.sectionHeader {
+  max-width: 720px;
+  margin-bottom: 18px;
+}
+
+.featureGrid,
+.faqGrid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.faqGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.featureGrid strong,
+.faqGrid strong {
+  color: var(--brand-blue);
+}
+
+.contactBand {
+  margin-bottom: 48px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.contactButton {
+  width: fit-content;
+  justify-self: end;
+}
+
 .form {
   display: grid;
   gap: 14px;
@@ -985,6 +1093,11 @@ small {
   .managementEditor,
   .cardGrid,
   .approvalDetails,
+  .programBand,
+  .splitSection,
+  .contactBand,
+  .featureGrid,
+  .faqGrid,
   .levelPreviewList {
     grid-template-columns: 1fr;
   }
@@ -995,6 +1108,10 @@ small {
 
   .wide {
     grid-column: auto;
+  }
+
+  .contactButton {
+    justify-self: start;
   }
 
   .sidebar nav {

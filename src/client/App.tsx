@@ -117,6 +117,103 @@ function PublicSite({ onLogin }: { onLogin: (session: Session) => void }) {
           );
         })}
       </section>
+
+      <section className="programBand">
+        <div>
+          <span className="eyebrow">Program Structure</span>
+          <h2>Writing practice with a clear weekly path.</h2>
+          <p>
+            Students work through level-based topics, weekly lessons, guided assignments,
+            teacher feedback, and optional paid workbooks or ebooks.
+          </p>
+        </div>
+        <div className="programSteps">
+          <article>
+            <strong>1</strong>
+            <span>Learn the week&apos;s writing skill through class materials and videos.</span>
+          </article>
+          <article>
+            <strong>2</strong>
+            <span>Submit paragraph or essay practice inside the student portal.</span>
+          </article>
+          <article>
+            <strong>3</strong>
+            <span>Receive teacher feedback and AI-supported writing guidance.</span>
+          </article>
+        </div>
+      </section>
+
+      <section className="publicSection">
+        <div className="sectionHeader">
+          <span className="eyebrow">What Students Build</span>
+          <h2>Stronger sentences, paragraphs, and essays.</h2>
+        </div>
+        <div className="featureGrid">
+          <article>
+            <strong>Grammar and punctuation</strong>
+            <p>Targeted correction practice for common writing mistakes.</p>
+          </article>
+          <article>
+            <strong>Academic vocabulary</strong>
+            <p>Better word choice for school writing and formal essays.</p>
+          </article>
+          <article>
+            <strong>Paragraph structure</strong>
+            <p>Topic sentences, supporting details, transitions, and conclusions.</p>
+          </article>
+          <article>
+            <strong>Essay writing</strong>
+            <p>Thesis statements, organization, evidence, and revision habits.</p>
+          </article>
+        </div>
+      </section>
+
+      <section className="publicSection splitSection">
+        <div>
+          <span className="eyebrow">Access</span>
+          <h2>Private portal for enrolled students.</h2>
+          <p>
+            iLEAP Academy creates student accounts, assigns the correct level,
+            publishes the current topic, and unlocks resources based on class progress or purchase.
+          </p>
+        </div>
+        <div className="infoList">
+          <span>Level-based resources</span>
+          <span>Teacher review queue</span>
+          <span>Paid ebooks and workbooks through Stripe</span>
+          <span>Password reset by email</span>
+        </div>
+      </section>
+
+      <section className="faqBand">
+        <div className="sectionHeader">
+          <span className="eyebrow">FAQ</span>
+          <h2>Common parent questions.</h2>
+        </div>
+        <div className="faqGrid">
+          <article>
+            <strong>Can students sign up by themselves?</strong>
+            <p>No. Accounts are created or approved by iLEAP Academy.</p>
+          </article>
+          <article>
+            <strong>Are materials available all at once?</strong>
+            <p>Teachers can publish only the topic or lesson currently being taught.</p>
+          </article>
+          <article>
+            <strong>How do paid ebooks work?</strong>
+            <p>Students buy through Stripe, then the resource unlocks in their portal.</p>
+          </article>
+        </div>
+      </section>
+
+      <section className="contactBand">
+        <div>
+          <span className="eyebrow">Contact</span>
+          <h2>Questions about enrollment or access?</h2>
+          <p>Email iLEAP Academy for placement, account help, or program details.</p>
+        </div>
+        <a className="primary contactButton" href="mailto:ileap.academy.icat@gmail.com">Email iLEAP Academy</a>
+      </section>
     </main>
   );
 }
