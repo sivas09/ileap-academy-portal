@@ -19,8 +19,20 @@ import {
 import { AdminUser, AiPrompt, api, Assignment, DashboardData, Level, money, OrderHistory, Product, Resource, ReviewStudent, ReviewSubmission, Session, SiteContent, uploadApi } from "./api";
 
 type NavItem = [string, React.ComponentType<{ size?: number }>, string];
+type FeedbackPayload = Record<string, string | number | null | string[] | undefined>;
+type FeedbackSection = [string, FeedbackPayload[string]];
 
 const stored = localStorage.getItem("portal.session");
+function storedSession() {
+  if (!stored) return null;
+  try {
+    return JSON.parse(stored) as Session;
+  } catch {
+    localStorage.removeItem("portal.session");
+    return null;
+  }
+}
+
 const defaultSiteContent: SiteContent = {
   heroEyebrow: "English Writing Program for Children",
   heroTitle: "Writing coaching, level-based resources, and teacher-guided feedback in one portal.",
@@ -49,7 +61,7 @@ function levelCardText(level: Level, content: SiteContent) {
 }
 
 export function App() {
-  const [session, setSession] = useState<Session | null>(stored ? JSON.parse(stored) : null);
+  const [session, setSession] = useState<Session | null>(storedSession);
   const [view, setView] = useState("dashboard");
 
   useEffect(() => {
@@ -443,7 +455,7 @@ function Portal({ session, view, setView }: { session: Session; view: string; se
 
   if (view === "resources") return <Resources resources={data.resources} products={data.products} token={session.token} />;
   if (view === "assignments") return <Assignments assignments={data.assignments} submissions={data.submissions} levels={data.levels} curriculum={data.curriculum} notificationRecipients={data.notificationRecipients} token={session.token} role={session.user.role} onSubmit={refresh} />;
-  if (view === "tutor" && session.user.role !== "STUDENT") return <AiTutor token={session.token} assignments={data.assignments} onSubmit={refresh} onDone={() => setView("dashboard")} />;
+  if (view === "tutor" && session.user.role !== "STUDENT") return <AiTutor token={session.token} assignments={data.assignments} onSubmit={refresh} />;
   if (view === "feedback" && session.user.role === "STUDENT") return <StudentFeedback submissions={data.submissions} />;
   if (view === "shop") return <Shop products={data.products} token={session.token} />;
   if (view === "review" && session.user.role !== "STUDENT") return <ReviewSubmissions levels={data.levels} assignments={data.assignments} token={session.token} onDone={() => setView("dashboard")} />;
@@ -1050,12 +1062,12 @@ function StudentFeedback({ submissions }: { submissions: DashboardData["submissi
   );
 }
 
-function AiTutor({ token, assignments, onSubmit, onDone }: { token: string; assignments: Assignment[]; onSubmit: () => void; onDone: () => void }) {
+function AiTutor({ token, assignments, onSubmit }: { token: string; assignments: Assignment[]; onSubmit: () => void }) {
   const [students, setStudents] = useState<ReviewStudent[]>([]);
   const [studentId, setStudentId] = useState("");
   const [assignmentId, setAssignmentId] = useState(assignments[0]?.id ?? "");
   const [pastedText, setPastedText] = useState("");
-  const [feedback, setFeedback] = useState<any | null>(null);
+  const [feedback, setFeedback] = useState<FeedbackPayload | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -1086,7 +1098,6 @@ function AiTutor({ token, assignments, onSubmit, onDone }: { token: string; assi
         setError(`AI generated fallback feedback because OpenAI returned: ${response.feedback.error}`);
       }
       onSubmit();
-      onDone();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not submit writing");
     } finally {
@@ -1135,8 +1146,8 @@ function AiTutor({ token, assignments, onSubmit, onDone }: { token: string; assi
   );
 }
 
-function FeedbackView({ feedback }: { feedback: any }) {
-  const rubricSections = [
+function FeedbackView({ feedback }: { feedback: FeedbackPayload }) {
+  const rubricSections: FeedbackSection[] = [
     ["Mark", feedback.markOutOf10 != null ? `${feedback.markOutOf10}/10` : null],
     ["Content", feedback.content],
     ["Grammar & Punctuation", feedback.grammarAndPunctuation],
@@ -1145,7 +1156,7 @@ function FeedbackView({ feedback }: { feedback: any }) {
     ["Good Transition Words", feedback.goodTransitionWords],
     ["Overall", feedback.overall]
   ];
-  const legacySections = [
+  const legacySections: FeedbackSection[] = [
     ["Overall", feedback.overall],
     ["Strengths", feedback.strengths],
     ["Grammar and Mechanics", feedback.grammarAndMechanics],
@@ -1161,7 +1172,7 @@ function FeedbackView({ feedback }: { feedback: any }) {
       {sections.filter(([, value]) => value).map(([label, value]) => (
         <div className="feedbackSection" key={label}>
           <strong>{label}</strong>
-          {Array.isArray(value) ? <ul>{value.map((item) => <li key={item}>{item}</li>)}</ul> : <p>{value}</p>}
+          {Array.isArray(value) ? <ul>{value.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ul> : <p>{value}</p>}
         </div>
       ))}
     </div>

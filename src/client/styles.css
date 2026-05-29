@@ -15,6 +15,8 @@
   --soft-blue: #e9f6fb;
   --soft-green: #eaf7ea;
   --soft-red: #fdeaea;
+  --shadow-sm: 0 8px 24px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 18px 46px rgba(0, 41, 107, 0.1);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -40,14 +42,32 @@ button {
   cursor: pointer;
 }
 
+button,
+a,
+input,
+select,
+textarea {
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid rgba(0, 137, 202, 0.26);
+  outline-offset: 2px;
+}
+
 .publicPage {
   min-height: 100vh;
   background:
-    linear-gradient(180deg, #ffffff 0%, #f7f9fc 44%, #fdf6fb 100%);
+    radial-gradient(circle at top left, rgba(0, 137, 202, 0.11), transparent 34rem),
+    linear-gradient(180deg, #ffffff 0%, #f7f9fc 48%, #ffffff 100%);
 }
 
 .publicNav {
-  height: 74px;
+  min-height: 74px;
   padding: 0 28px;
   display: flex;
   align-items: center;
@@ -78,6 +98,7 @@ button {
 .identity strong {
   color: var(--brand-blue);
   font-weight: 800;
+  letter-spacing: 0.01em;
 }
 
 .tab {
@@ -106,6 +127,12 @@ button {
   padding: 0 12px;
   font-weight: 800;
   text-decoration: none;
+}
+
+.portalAccessBadge:hover,
+.secondary:hover {
+  border-color: rgba(0, 137, 202, 0.45);
+  background: #f8fcff;
 }
 
 .hero {
@@ -177,11 +204,12 @@ button {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
-  box-shadow: 0 16px 40px rgba(0, 41, 107, 0.06);
+  box-shadow: var(--shadow-sm);
 }
 
 .authCard {
   padding: 24px;
+  box-shadow: var(--shadow-md);
 }
 
 .levelBand {
@@ -198,6 +226,7 @@ button {
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 20px;
+  box-shadow: var(--shadow-sm);
 }
 
 .levelCard strong {
@@ -348,11 +377,25 @@ input,
 select,
 textarea {
   width: 100%;
-  border: 1px solid #d6c8d4;
+  border: 1px solid var(--line);
   border-radius: 8px;
   background: #ffffff;
   color: var(--ink);
   padding: 11px 12px;
+}
+
+input:hover,
+select:hover,
+textarea:hover {
+  border-color: #b7c6d9;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--brand-light-blue);
+  box-shadow: 0 0 0 4px rgba(0, 137, 202, 0.12);
+  outline: none;
 }
 
 textarea {
@@ -381,6 +424,11 @@ textarea {
   border: 0;
   background: var(--brand-blue);
   color: #ffffff;
+}
+
+.primary:hover:not(:disabled) {
+  background: #07377f;
+  transform: translateY(-1px);
 }
 
 .secondary {
@@ -423,6 +471,9 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 24px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
 }
 
 .identity .small {
@@ -467,6 +518,10 @@ textarea {
   color: #ffffff;
 }
 
+.sidebar button.active {
+  box-shadow: inset 3px 0 0 var(--brand-light-blue);
+}
+
 .logout {
   margin-top: auto;
 }
@@ -474,7 +529,8 @@ textarea {
 .content {
   padding: 24px;
   overflow: auto;
-  background: #f7f9fc;
+  background:
+    linear-gradient(180deg, #f8fbff 0%, #f7f9fc 28rem);
 }
 
 .topbar {
@@ -517,6 +573,33 @@ textarea {
 .metric,
 .resourceCard {
   padding: 18px;
+}
+
+.resourceCard,
+.levelCard,
+.programSteps article,
+.featureGrid article,
+.faqGrid article,
+.infoList span,
+.userRow,
+.managementRow,
+.historyRow,
+.curriculumRow {
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.resourceCard:hover,
+.levelCard:hover,
+.programSteps article:hover,
+.featureGrid article:hover,
+.faqGrid article:hover,
+.userRow:hover,
+.managementRow:hover,
+.historyRow:hover,
+.curriculumRow:hover {
+  border-color: rgba(0, 137, 202, 0.28);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
 }
 
 .wide {
@@ -1117,6 +1200,11 @@ small {
   .sidebar nav {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .sidebar {
+    position: static;
+    height: auto;
+  }
 }
 
 @media (max-width: 620px) {
@@ -1135,10 +1223,26 @@ small {
     padding: 14px;
   }
 
+  .brand {
+    align-self: flex-start;
+  }
+
   .content,
   .hero,
   .levelBand {
     padding-left: 16px;
     padding-right: 16px;
+  }
+
+  .heroCopy h1 {
+    font-size: 34px;
+  }
+
+  .sidebar {
+    padding: 14px;
+  }
+
+  .sidebar nav {
+    grid-template-columns: 1fr;
   }
 }

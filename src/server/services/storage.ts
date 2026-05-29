@@ -73,7 +73,8 @@ export async function saveUploadedFile(file: Express.Multer.File): Promise<Store
 
 export function resolveFileKey(fileKey: string) {
   const resolved = path.resolve(uploadRoot, fileKey);
-  if (!resolved.startsWith(uploadRoot)) {
+  const relative = path.relative(uploadRoot, resolved);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
     throw new Error("Invalid file key");
   }
   return resolved;

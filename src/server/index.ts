@@ -22,6 +22,11 @@ const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPE
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
 const appUrl = process.env.APP_URL ?? "http://localhost:5174";
 const defaultNotificationEmail = process.env.DEFAULT_SUBMISSION_NOTIFICATION_EMAIL ?? "ileap.academy.icat@gmail.com";
+const allowedOrigins = new Set([appUrl, "http://localhost:5173", "http://localhost:5174"]);
+
+if (process.env.NODE_ENV === "production" && !process.env.JWT_SECRET) {
+  throw new Error("JWT_SECRET must be configured in production.");
+}
 const defaultSiteContent = {
   heroEyebrow: "English Writing Program for Children",
   heroTitle: "Writing coaching, level-based resources, and teacher-guided feedback in one portal.",
@@ -56,7 +61,17 @@ const upload = multer({
 });
 
 app.use(helmet());
-app.use(cors({ origin: true, credentials: true }));
+app.use(cors({
+  credentials: true,
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.has(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error("CORS origin is not allowed"));
+  }
+}));
 
 app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async (req, res) => {
   if (!stripe || !process.env.STRIPE_WEBHOOK_SECRET) {
@@ -151,7 +166,7 @@ async function requireActiveAccount(req: express.Request, res: express.Response,
 
   const user = await prisma.user.findUnique({
     where: { id: req.user.id },
-    select: { status: true }
+    select: { id: true, email: true, role: true, status: true }
   });
 
   if (!user) {
@@ -169,6 +184,7 @@ async function requireActiveAccount(req: express.Request, res: express.Response,
     return;
   }
 
+  req.user = { id: user.id, email: user.email, role: user.role };
   next();
 }
 
@@ -733,7 +749,7 @@ app.get("/api/me", requireAuth, async (req, res) => {
   res.json(user ? publicUser(user) : null);
 });
 
-app.post("/api/me/change-password", requireAuth, async (req, res) => {
+app.post("/api/me/change-password", requireAuth, requireActiveAccount, async (req, res) => {
   const input = changePasswordSchema.safeParse(req.body);
   if (!input.success) {
     res.status(400).json({ error: input.error.flatten() });
@@ -1365,6 +1381,12 @@ app.post("/api/admin/assignments", requireAuth, requireActiveAccount, requireRol
   const scope = await validateCurriculumScope(input.data);
   if (scope.error) {
     res.status(400).json({ error: scope.error });
+    return;
+  }
+
+  const teacherAccessError = await validateTeacherLevelAccess(req.user!, input.data);
+  if (teacherAccessError) {
+    res.status(403).json({ error: teacherAccessError });
     return;
   }
 

@@ -4,6 +4,14 @@ Date: May 20, 2026
 Portal URL: `https://english.ileapacademy.com/`  
 Scope: English Writing Program portal
 
+## Role-Specific Guides
+
+Use these focused guides for day-to-day training:
+
+- [Admin User Guide](admin-user-guide.md)
+- [Teacher User Guide](teacher-user-guide.md)
+- [Student User Guide](student-user-guide.md)
+
 ## 1. Purpose
 
 This guide explains what students, teachers, and admins can do inside the iLEAP Academy English Writing Portal. It is written as an operating guide for the current portal, not as a technical document.
@@ -416,4 +424,3 @@ The following features are not required for the current phase but would improve 
 | Student | Learn and submit writing | Log in, view level resources, view assignments, submit writing, view AI and teacher feedback, view shop |
 | Teacher | Teach and review | View assigned levels, manage assignments, review submissions, run AI Tutor, add teacher feedback |
 | Admin | Operate the portal | Manage users, levels, resources, assignments, products, prompts, submissions, and feedback |
-
