@@ -2,8 +2,24 @@ import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
+const expectedSchema = process.env.APP_DATABASE_SCHEMA || "english_portal";
+
+function assertEnglishPortalSchema() {
+  const rawUrl = process.env.DATABASE_URL;
+  if (!rawUrl) {
+    throw new Error("DATABASE_URL is required before running seed.");
+  }
+
+  const parsed = new URL(rawUrl);
+  const schema = parsed.searchParams.get("schema");
+  if (schema !== expectedSchema) {
+    throw new Error(`Refusing to seed schema '${schema ?? "public"}'; expected '${expectedSchema}'.`);
+  }
+}
 
 async function main() {
+  assertEnglishPortalSchema();
+
   await prisma.auditLog.deleteMany();
   await prisma.entitlement.deleteMany();
   await prisma.orderItem.deleteMany();

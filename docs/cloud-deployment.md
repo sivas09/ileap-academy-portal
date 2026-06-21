@@ -13,11 +13,12 @@
 ## Deployment Steps
 
 1. Create a production PostgreSQL database.
-2. Update `prisma/schema.prisma` datasource provider to `postgresql`.
+2. Keep `prisma/schema.prisma` on the PostgreSQL provider.
 3. Set production environment variables:
 
 ```env
-DATABASE_URL="postgresql://..."
+DATABASE_URL="postgresql://...?schema=english_portal"
+APP_DATABASE_SCHEMA="english_portal"
 JWT_SECRET="long-random-secret"
 OPENAI_API_KEY="sk-..."
 OPENAI_MODEL="gpt-4.1-mini"
@@ -29,7 +30,7 @@ PORT="4000"
 ```bash
 npm install
 npm run prisma:generate
-npm run db:push
+npm run db:migrate:deploy
 npm run build
 npm start
 ```

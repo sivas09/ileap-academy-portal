@@ -11,8 +11,8 @@ The portal is built as a full-stack web application.
 - Public website and portal UI are built with React.
 - Backend API is built with Express.
 - Data is managed through Prisma.
-- Local development uses SQLite.
-- Production deployment on Render uses PostgreSQL.
+- Local and production data use PostgreSQL through Prisma migrations.
+- Production deployment on Render uses the `english_portal` schema in PostgreSQL.
 - Uploaded files are stored on Render persistent disk for now.
 - AI tutor feedback uses the OpenAI API.
 - Stripe checkout code exists, but current payment operations may continue through the existing `theileap.com` flow until portal checkout is fully adopted.
@@ -95,8 +95,8 @@ Important API areas:
 ## 5. Database Stack
 
 - Prisma ORM
-- SQLite for local development
-- PostgreSQL on Render
+- PostgreSQL for local development and Render
+- Dedicated PostgreSQL schema: `english_portal`
 
 Main schema:
 
@@ -213,16 +213,15 @@ Deployment files:
 
 - `render.yaml`
 - `docs/render-deployment.md`
-- `scripts/use-postgres-schema.mjs`
+- `scripts/with-english-portal-database-url.mjs`
 
 Render build:
 
 - Installs dependencies
-- Switches Prisma provider from SQLite to PostgreSQL for deployment
 - Generates Prisma Client
 - Builds React frontend
 - Builds Express backend
-- Pushes Prisma schema to PostgreSQL
+- Runs Prisma migrations in the `english_portal` PostgreSQL schema
 
 ## 10. Recommended Next Build Phase
 

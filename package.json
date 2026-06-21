@@ -9,12 +9,13 @@
     "dev:web": "vite --host 0.0.0.0 --port 5174",
     "build": "tsc -b && vite build",
     "build:server": "tsc -p tsconfig.server.json",
-    "render:build": "node scripts/use-postgres-schema.mjs && prisma generate && tsc -b && vite build && npm run build:server",
-    "render:start": "prisma db push && node dist-server/server/index.js",
+    "render:build": "npm run prisma:generate && tsc -b && vite build && npm run build:server",
+    "render:migrate": "node scripts/with-english-portal-database-url.mjs prisma migrate deploy",
+    "render:start": "npm run render:migrate && node scripts/with-english-portal-database-url.mjs node dist-server/server/index.js",
     "start": "node dist-server/server/index.js",
-    "prisma:generate": "prisma generate",
-    "db:push": "prisma db push",
-    "db:seed": "tsx prisma/seed.ts"
+    "prisma:generate": "node scripts/with-english-portal-database-url.mjs prisma generate",
+    "db:migrate:deploy": "node scripts/with-english-portal-database-url.mjs prisma migrate deploy",
+    "db:seed": "node scripts/with-english-portal-database-url.mjs tsx prisma/seed.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1051.0",

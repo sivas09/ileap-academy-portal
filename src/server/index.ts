@@ -1157,10 +1157,9 @@ app.post("/api/admin/resources/upload", requireAuth, requireActiveAccount, requi
     return;
   }
 
-  const stored = await saveUploadedFile(req.file);
   const input = uploadedResourceSchema.safeParse({
     ...req.body,
-    fileKey: stored.fileKey,
+    fileKey: null,
     url: req.body.url || null,
     levelId: req.body.levelId || null,
     topicId: req.body.topicId || null,
@@ -1184,21 +1183,28 @@ app.post("/api/admin/resources/upload", requireAuth, requireActiveAccount, requi
     return;
   }
 
-  const resource = await prisma.resource.create({
-    data: {
-      title: input.data.title,
-      description: input.data.description,
-      type: input.data.type,
-      accessMode: input.data.accessMode,
-      url: input.data.url,
-      fileKey: input.data.fileKey,
-      originalFileName: stored.originalName,
-      levelId: input.data.levelId,
-      topicId: input.data.topicId,
-      lessonId: input.data.lessonId,
-      isPublished: input.data.isPublished
-    }
-  });
+  const stored = await saveUploadedFile(req.file);
+  let resource;
+  try {
+    resource = await prisma.resource.create({
+      data: {
+        title: input.data.title,
+        description: input.data.description,
+        type: input.data.type,
+        accessMode: input.data.accessMode,
+        url: input.data.url,
+        fileKey: stored.fileKey,
+        originalFileName: stored.originalName,
+        levelId: input.data.levelId,
+        topicId: input.data.topicId,
+        lessonId: input.data.lessonId,
+        isPublished: input.data.isPublished
+      }
+    });
+  } catch (error) {
+    await deleteStoredFile(stored.fileKey);
+    throw error;
+  }
 
   await writeAudit(req.user?.id, "CREATE", "Resource", resource.id, {
     title: resource.title,
@@ -1244,20 +1250,26 @@ app.post("/api/admin/resources/bulk-upload", requireAuth, requireActiveAccount, 
   for (const file of files) {
     const stored = await saveUploadedFile(file);
     const title = path.basename(stored.originalName, path.extname(stored.originalName)).replace(/[_-]+/g, " ").trim() || stored.originalName;
-    const resource = await prisma.resource.create({
-      data: {
-        title,
-        description: input.data.description,
-        type: input.data.type,
-        accessMode: input.data.accessMode,
-        fileKey: stored.fileKey,
-        originalFileName: stored.originalName,
-        levelId: input.data.levelId,
-        topicId: input.data.topicId,
-        lessonId: input.data.lessonId,
-        isPublished: input.data.isPublished
-      }
-    });
+    let resource;
+    try {
+      resource = await prisma.resource.create({
+        data: {
+          title,
+          description: input.data.description,
+          type: input.data.type,
+          accessMode: input.data.accessMode,
+          fileKey: stored.fileKey,
+          originalFileName: stored.originalName,
+          levelId: input.data.levelId,
+          topicId: input.data.topicId,
+          lessonId: input.data.lessonId,
+          isPublished: input.data.isPublished
+        }
+      });
+    } catch (error) {
+      await deleteStoredFile(stored.fileKey);
+      throw error;
+    }
     created.push(resource);
     await writeAudit(req.user?.id, "CREATE", "Resource", resource.id, {
       title: resource.title,
@@ -2307,6 +2319,14 @@ if (process.env.NODE_ENV === "production") {
 }
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  if (err instanceof multer.MulterError) {
+    const message = err.code === "LIMIT_FILE_SIZE"
+      ? "Uploaded files must be 25 MB or smaller."
+      : err.message;
+    res.status(400).json({ error: message });
+    return;
+  }
+
   console.error(err);
   res.status(500).json({ error: "Unexpected server error" });
 });

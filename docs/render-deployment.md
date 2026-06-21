@@ -36,6 +36,7 @@ SMTP_PASS=...
 ```
 
 Render generates `JWT_SECRET` automatically.
+Render provides `DATABASE_URL` from the shared PostgreSQL database. The app sets `APP_DATABASE_SCHEMA=english_portal`, and the Render start script appends `?schema=english_portal` before running Prisma migrations and the server.
 `R2_ENDPOINT`, `SMTP_FROM`, and `DEFAULT_SUBMISSION_NOTIFICATION_EMAIL` are optional unless your Cloudflare or email setup requires custom values.
 
 ## Deploy Steps
@@ -111,8 +112,8 @@ https://english.ileapacademy.com
 
 ## Notes
 
-- The Render build converts Prisma from SQLite to PostgreSQL during deployment.
-- Local development can continue using SQLite.
+- Prisma uses PostgreSQL migrations and deploys them with `prisma migrate deploy`.
+- This app uses only the `english_portal` PostgreSQL schema inside the shared Render database.
 - Uploaded files are stored on the Render persistent disk for now.
 - For larger scale later, replace local disk storage with S3, Cloudflare R2, or Supabase Storage.
 - The free Render PostgreSQL plan is suitable for testing only. Upgrade before storing real student/payment data.

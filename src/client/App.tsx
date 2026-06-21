@@ -96,7 +96,7 @@ function PublicSite({ onLogin }: { onLogin: (session: Session) => void }) {
           <span>iLEAP Academy</span>
         </div>
         <div className="navActions">
-          <a className="portalAccessBadge" href="https://www.ileapacademy.com/">Student Portal</a>
+          <a className="portalAccessBadge" href="https://www.ileapacademy.com/">Main Website</a>
         </div>
       </nav>
 

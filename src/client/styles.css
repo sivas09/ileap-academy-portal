@@ -12,11 +12,12 @@
   --line: #dbe3ee;
   --muted: #64748b;
   --ink: #1f2937;
+  --ink-strong: #0f172a;
   --soft-blue: #e9f6fb;
   --soft-green: #eaf7ea;
   --soft-red: #fdeaea;
-  --shadow-sm: 0 8px 24px rgba(15, 23, 42, 0.06);
-  --shadow-md: 0 18px 46px rgba(0, 41, 107, 0.1);
+  --shadow-sm: 0 10px 28px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 18px 48px rgba(15, 23, 42, 0.11);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -62,8 +63,7 @@ textarea:focus-visible {
 .publicPage {
   min-height: 100vh;
   background:
-    radial-gradient(circle at top left, rgba(0, 137, 202, 0.11), transparent 34rem),
-    linear-gradient(180deg, #ffffff 0%, #f7f9fc 48%, #ffffff 100%);
+    linear-gradient(180deg, #ffffff 0%, #f3f7fb 42%, #ffffff 100%);
 }
 
 .publicNav {
@@ -73,8 +73,11 @@ textarea:focus-visible {
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid rgba(0, 41, 107, 0.12);
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(14px);
+  position: sticky;
+  top: 0;
+  z-index: 20;
 }
 
 .brand,
@@ -147,7 +150,7 @@ textarea:focus-visible {
 
 .heroCopy h1 {
   margin: 12px 0;
-  color: var(--brand-blue);
+  color: var(--ink-strong);
   font-size: clamp(36px, 5vw, 58px);
   line-height: 1.02;
   letter-spacing: 0;
@@ -210,6 +213,7 @@ textarea:focus-visible {
 .authCard {
   padding: 24px;
   box-shadow: var(--shadow-md);
+  border-color: rgba(0, 41, 107, 0.14);
 }
 
 .levelBand {
@@ -227,6 +231,7 @@ textarea:focus-visible {
   border-radius: 8px;
   padding: 20px;
   box-shadow: var(--shadow-sm);
+  min-height: 188px;
 }
 
 .levelCard strong {
@@ -461,11 +466,12 @@ textarea {
 .appFrame {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 256px 1fr;
+  grid-template-columns: 268px minmax(0, 1fr);
+  background: #eef4f9;
 }
 
 .sidebar {
-  background: var(--brand-blue);
+  background: linear-gradient(180deg, #062965 0%, #092554 100%);
   color: #f8fafc;
   padding: 20px;
   display: flex;
@@ -510,6 +516,7 @@ textarea {
   align-items: center;
   padding: 0 12px;
   text-align: left;
+  font-weight: 750;
 }
 
 .sidebar button.active,
@@ -527,10 +534,10 @@ textarea {
 }
 
 .content {
-  padding: 24px;
+  padding: 28px;
   overflow: auto;
   background:
-    linear-gradient(180deg, #f8fbff 0%, #f7f9fc 28rem);
+    linear-gradient(180deg, #f8fbff 0%, #f2f6fa 28rem);
 }
 
 .topbar {
@@ -538,6 +545,11 @@ textarea {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 22px;
+  padding: 18px 20px;
+  border: 1px solid rgba(0, 41, 107, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: var(--shadow-sm);
 }
 
 .grid {
@@ -572,7 +584,8 @@ textarea {
 .panel,
 .metric,
 .resourceCard {
-  padding: 18px;
+  padding: 20px;
+  border-color: rgba(15, 23, 42, 0.1);
 }
 
 .resourceCard,
@@ -633,6 +646,7 @@ textarea {
 
 .resourceCard.locked {
   background: #fbfcff;
+  border-style: dashed;
 }
 
 .assignmentCard {
@@ -800,7 +814,7 @@ textarea {
   border: 1px solid rgba(230, 105, 10, 0.24);
   border-radius: 8px;
   padding: 24px;
-  box-shadow: 0 16px 40px rgba(0, 41, 107, 0.06);
+  box-shadow: var(--shadow-md);
 }
 
 .approvalHero h2 {
@@ -1232,6 +1246,15 @@ small {
   .levelBand {
     padding-left: 16px;
     padding-right: 16px;
+  }
+
+  .content {
+    padding-top: 16px;
+  }
+
+  .topbar {
+    align-items: flex-start;
+    padding: 14px;
   }
 
   .heroCopy h1 {

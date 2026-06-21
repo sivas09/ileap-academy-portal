@@ -19,7 +19,7 @@ A full-stack starter for an iLEAP Academy family portal with parent/student work
 Copy-Item .env.example .env
 npm install
 npm run prisma:generate
-npm run db:push
+npm run db:migrate:deploy
 npm run db:seed
 npm run dev
 ```
@@ -34,14 +34,15 @@ Seed accounts:
 ## Environment
 
 ```env
-DATABASE_URL="file:./dev.db"
+DATABASE_URL="postgresql://user:password@localhost:5432/ileap_shared?schema=english_portal"
+APP_DATABASE_SCHEMA="english_portal"
 JWT_SECRET="replace-this-with-a-long-random-secret"
 OPENAI_API_KEY=""
 OPENAI_MODEL="gpt-4.1-mini"
 PORT="4000"
 ```
 
-For production PostgreSQL, change `prisma/schema.prisma` datasource provider from `sqlite` to `postgresql` and set `DATABASE_URL` to the managed database connection string.
+This app uses PostgreSQL through Prisma migrations. Keep `DATABASE_URL` scoped to `?schema=english_portal`; the Render scripts enforce that schema when Render provides a shared database connection string.
 
 ## Core API
 

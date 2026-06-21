@@ -2,10 +2,8 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// Local development uses SQLite. The models avoid SQLite-only features so the
-// same schema can move to PostgreSQL by changing provider and DATABASE_URL.
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
