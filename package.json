@@ -12,7 +12,7 @@
     "render:build": "npm run prisma:generate && tsc -b && vite build && npm run build:server",
     "render:migrate": "node scripts/with-english-portal-database-url.mjs prisma migrate deploy",
     "render:start": "npm run render:migrate && node scripts/with-english-portal-database-url.mjs node dist-server/server/index.js",
-    "start": "node dist-server/server/index.js",
+    "start": "npm run render:start",
     "prisma:generate": "node scripts/with-english-portal-database-url.mjs prisma generate",
     "db:migrate:deploy": "node scripts/with-english-portal-database-url.mjs prisma migrate deploy",
     "db:seed": "node scripts/with-english-portal-database-url.mjs tsx prisma/seed.ts"
