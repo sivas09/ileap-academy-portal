@@ -120,6 +120,22 @@ ADMIN_EMAIL=admin@example.com ADMIN_PASSWORD='Member123!' npm run admin:ensure
 
 This command runs through the app database wrapper, so it targets the `english_portal` schema.
 
+## Copy Data From The Old Public Schema
+
+If the portal previously ran against PostgreSQL's default `public` schema, old users, submissions, resources, and orders may still be there after switching the app to `english_portal`. Preview the copy first:
+
+```bash
+npm run data:copy-public:dry-run
+```
+
+If the counts look correct, copy missing rows into `english_portal`:
+
+```bash
+npm run data:copy-public:apply
+```
+
+The copy uses `ON CONFLICT DO NOTHING`, so existing rows in `english_portal` are not overwritten.
+
 ## Notes
 
 - Prisma uses PostgreSQL migrations and deploys them with `prisma migrate deploy`.
