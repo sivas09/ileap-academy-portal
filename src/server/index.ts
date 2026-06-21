@@ -471,7 +471,7 @@ async function unlockOrderEntitlements(orderId: string) {
 }
 
 const loginSchema = z.object({
-  email: z.string().email(),
+  email: z.string().trim().toLowerCase().email(),
   password: z.string().min(8)
 });
 
@@ -620,6 +620,39 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
 });
 
+app.post("/api/debug/auth-check", async (req, res) => {
+  if (!process.env.AUTH_DEBUG_TOKEN || req.headers["x-debug-token"] !== process.env.AUTH_DEBUG_TOKEN) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  const input = loginSchema.safeParse(req.body);
+  if (!input.success) {
+    res.status(400).json({ error: input.error.flatten() });
+    return;
+  }
+
+  const [searchPath, user] = await Promise.all([
+    prisma.$queryRaw<Array<{ search_path: string }>>`SHOW search_path`,
+    prisma.user.findUnique({
+      where: { email: input.data.email },
+      select: { email: true, role: true, status: true, passwordHash: true }
+    })
+  ]);
+
+  res.json({
+    searchPath: searchPath[0]?.search_path ?? null,
+    user: user
+      ? {
+          email: user.email,
+          role: user.role,
+          status: user.status,
+          passwordMatches: await bcrypt.compare(input.data.password, user.passwordHash)
+        }
+      : null
+  });
+});
+
 app.get("/api/public/levels", async (_req, res) => {
   const levels = await prisma.level.findMany({ orderBy: { sortOrder: "asc" } });
   res.json(levels);
@@ -669,11 +702,21 @@ app.post("/api/auth/login", async (req, res) => {
   }
 
   const user = await prisma.user.findUnique({
-    where: { email: input.data.email.toLowerCase() },
+    where: { email: input.data.email },
     include: { student: { include: { level: true } } }
   });
 
-  if (!user || user.status === "DISABLED" || !(await bcrypt.compare(input.data.password, user.passwordHash))) {
+  const passwordMatches = user ? await bcrypt.compare(input.data.password, user.passwordHash) : false;
+  if (process.env.LOG_AUTH_DEBUG === "true") {
+    console.info("Login attempt", {
+      email: input.data.email,
+      userFound: Boolean(user),
+      status: user?.status ?? null,
+      passwordMatches
+    });
+  }
+
+  if (!user || user.status === "DISABLED" || !passwordMatches) {
     res.status(401).json({ error: "Invalid email or password" });
     return;
   }

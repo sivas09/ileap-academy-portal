@@ -242,7 +242,7 @@ function Login({ onLogin, content }: { onLogin: (session: Session) => void; cont
     setError("");
     setMessage("");
     try {
-      onLogin(await api<Session>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }));
+      onLogin(await api<Session>("/auth/login", { method: "POST", body: JSON.stringify({ email: email.trim().toLowerCase(), password }) }));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     }
