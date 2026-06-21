@@ -110,6 +110,16 @@ Then open:
 https://english.ileapacademy.com
 ```
 
+## Create Or Repair Admin Login
+
+Do not run `npm run db:seed` in production unless you intend to reset seeded portal data. To create or repair one admin account, open the Render web service Shell and run:
+
+```bash
+ADMIN_EMAIL=admin@example.com ADMIN_PASSWORD='Member123!' npm run admin:ensure
+```
+
+This command runs through the app database wrapper, so it targets the `english_portal` schema.
+
 ## Notes
 
 - Prisma uses PostgreSQL migrations and deploys them with `prisma migrate deploy`.

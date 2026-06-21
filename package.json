@@ -15,7 +15,8 @@
     "start": "npm run render:start",
     "prisma:generate": "node scripts/with-english-portal-database-url.mjs prisma generate",
     "db:migrate:deploy": "node scripts/with-english-portal-database-url.mjs prisma migrate deploy",
-    "db:seed": "node scripts/with-english-portal-database-url.mjs tsx prisma/seed.ts"
+    "db:seed": "node scripts/with-english-portal-database-url.mjs tsx prisma/seed.ts",
+    "admin:ensure": "node scripts/with-english-portal-database-url.mjs node scripts/ensure-admin.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1051.0",
