@@ -136,15 +136,16 @@ function requireAuth(req: express.Request, res: express.Response, next: express.
   const token = header?.startsWith("Bearer ") ? header.slice(7) : null;
 
   if (!token) {
-    res.status(401).json({ error: "Missing authorization token" });
+    res.status(401).json({ error: "Missing authorization token", code: "AUTH_TOKEN_MISSING" });
     return;
   }
 
   try {
     req.user = jwt.verify(token, jwtSecret) as AuthUser;
     next();
-  } catch {
-    res.status(401).json({ error: "Invalid or expired token" });
+  } catch (err) {
+    const code = err instanceof jwt.TokenExpiredError ? "AUTH_TOKEN_EXPIRED" : "AUTH_TOKEN_INVALID";
+    res.status(401).json({ error: "Invalid or expired token", code });
   }
 }
 
@@ -160,7 +161,7 @@ function requireRole(...roles: Role[]) {
 
 async function requireActiveAccount(req: express.Request, res: express.Response, next: express.NextFunction) {
   if (!req.user) {
-    res.status(401).json({ error: "Missing authorization token" });
+    res.status(401).json({ error: "Missing authorization token", code: "AUTH_TOKEN_MISSING" });
     return;
   }
 
@@ -170,7 +171,7 @@ async function requireActiveAccount(req: express.Request, res: express.Response,
   });
 
   if (!user) {
-    res.status(401).json({ error: "Invalid or expired token" });
+    res.status(401).json({ error: "Invalid or expired token", code: "AUTH_TOKEN_INVALID" });
     return;
   }
 

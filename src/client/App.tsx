@@ -16,17 +16,37 @@ import {
   UserRound,
   Video
 } from "lucide-react";
-import { AdminUser, AiPrompt, api, Assignment, DashboardData, Level, money, OrderHistory, Product, Resource, ReviewStudent, ReviewSubmission, Session, SiteContent, uploadApi } from "./api";
+import { AdminUser, AiPrompt, api, Assignment, DashboardData, Level, money, OrderHistory, Product, Resource, ReviewStudent, ReviewSubmission, SESSION_EXPIRED_EVENT, SESSION_EXPIRED_MESSAGE, Session, SiteContent, uploadApi } from "./api";
 
 type NavItem = [string, React.ComponentType<{ size?: number }>, string];
 type FeedbackPayload = Record<string, string | number | null | string[] | undefined>;
 type FeedbackSection = [string, FeedbackPayload[string]];
 
-const stored = localStorage.getItem("portal.session");
+function getJwtExpiresAt(token: string) {
+  const [, payload] = token.split(".");
+  if (!payload) return null;
+
+  try {
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const decoded = JSON.parse(atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "="))) as { exp?: unknown };
+    return typeof decoded.exp === "number" ? decoded.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
 function storedSession() {
+  const stored = localStorage.getItem("portal.session");
   if (!stored) return null;
   try {
-    return JSON.parse(stored) as Session;
+    const session = JSON.parse(stored) as Session;
+    const expiresAt = getJwtExpiresAt(session.token);
+    if (expiresAt && expiresAt <= Date.now()) {
+      localStorage.removeItem("portal.session");
+      sessionStorage.setItem("portal.sessionMessage", SESSION_EXPIRED_MESSAGE);
+      return null;
+    }
+    return session;
   } catch {
     localStorage.removeItem("portal.session");
     return null;
@@ -63,13 +83,35 @@ function levelCardText(level: Level, content: SiteContent) {
 export function App() {
   const [session, setSession] = useState<Session | null>(storedSession);
   const [view, setView] = useState("dashboard");
+  const [sessionMessage, setSessionMessage] = useState(() => {
+    const message = sessionStorage.getItem("portal.sessionMessage") ?? "";
+    sessionStorage.removeItem("portal.sessionMessage");
+    return message;
+  });
 
   useEffect(() => {
     if (session) localStorage.setItem("portal.session", JSON.stringify(session));
     else localStorage.removeItem("portal.session");
   }, [session]);
 
-  if (!session) return <PublicSite onLogin={setSession} />;
+  useEffect(() => {
+    function expireSession() {
+      localStorage.removeItem("portal.session");
+      setSession(null);
+      setView("dashboard");
+      setSessionMessage(SESSION_EXPIRED_MESSAGE);
+    }
+
+    window.addEventListener(SESSION_EXPIRED_EVENT, expireSession);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, expireSession);
+  }, []);
+
+  function handleLogin(nextSession: Session) {
+    setSessionMessage("");
+    setSession(nextSession);
+  }
+
+  if (!session) return <PublicSite onLogin={handleLogin} sessionMessage={sessionMessage} />;
 
   return (
     <Shell session={session} view={view} setView={setView} onLogout={() => setSession(null)}>
@@ -78,7 +120,7 @@ export function App() {
   );
 }
 
-function PublicSite({ onLogin }: { onLogin: (session: Session) => void }) {
+function PublicSite({ onLogin, sessionMessage }: { onLogin: (session: Session) => void; sessionMessage?: string }) {
   const [levels, setLevels] = useState<Level[]>([]);
   const [content, setContent] = useState<SiteContent>(defaultSiteContent);
   const resetToken = new URLSearchParams(window.location.search).get("resetToken");
@@ -113,7 +155,7 @@ function PublicSite({ onLogin }: { onLogin: (session: Session) => void }) {
           </div>
         </div>
         <section className="authCard">
-          {resetToken ? <ResetPassword token={resetToken} /> : <Login onLogin={onLogin} content={content} />}
+          {resetToken ? <ResetPassword token={resetToken} /> : <Login onLogin={onLogin} content={content} sessionMessage={sessionMessage} />}
         </section>
       </section>
 
@@ -230,7 +272,7 @@ function PublicSite({ onLogin }: { onLogin: (session: Session) => void }) {
   );
 }
 
-function Login({ onLogin, content }: { onLogin: (session: Session) => void; content: SiteContent }) {
+function Login({ onLogin, content, sessionMessage }: { onLogin: (session: Session) => void; content: SiteContent; sessionMessage?: string }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState<"login" | "forgot">("login");
@@ -287,6 +329,7 @@ function Login({ onLogin, content }: { onLogin: (session: Session) => void; cont
         Password
         <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
       </label>
+      {sessionMessage && <p className="success">{sessionMessage}</p>}
       {error && <div className="error">{error}</div>}
       <button className="primary" type="submit">Sign in</button>
       <button className="secondary" type="button" onClick={() => setMode("forgot")}>Forgot password?</button>
@@ -690,6 +733,10 @@ function Resources({ resources, products, token }: { resources: Resource[]; prod
     });
 
     if (!response.ok) {
+      if (response.status === 401) {
+        window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
+        return;
+      }
       alert("Could not open this resource. Please sign in again or ask an admin to check access.");
       return;
     }

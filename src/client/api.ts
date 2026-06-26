@@ -199,6 +199,19 @@ export type AdminUser = Session["user"] & {
   teacherLevels: Level[];
 };
 
+export const SESSION_EXPIRED_MESSAGE = "Your session expired. Please log in again.";
+export const SESSION_EXPIRED_EVENT = "portal:session-expired";
+
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 function formatApiError(error: unknown) {
   if (typeof error === "string") return error;
   if (!error || typeof error !== "object") return "Request failed";
@@ -222,6 +235,17 @@ function formatApiError(error: unknown) {
   return [...formMessages, ...fieldMessages].join("; ") || "Request failed";
 }
 
+async function handleApiError(response: Response): Promise<never> {
+  const error = await response.json().catch(() => ({ error: "Request failed" }));
+
+  if (response.status === 401) {
+    window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
+    throw new ApiError(SESSION_EXPIRED_MESSAGE, response.status);
+  }
+
+  throw new ApiError(formatApiError(error), response.status);
+}
+
 export async function api<T>(path: string, options: RequestInit = {}, token?: string): Promise<T> {
   const response = await fetch(`/api${path}`, {
     ...options,
@@ -233,8 +257,7 @@ export async function api<T>(path: string, options: RequestInit = {}, token?: st
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: "Request failed" }));
-    throw new Error(formatApiError(error));
+    await handleApiError(response);
   }
 
   return response.json();
@@ -250,8 +273,7 @@ export async function uploadApi<T>(path: string, formData: FormData, token: stri
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: "Request failed" }));
-    throw new Error(formatApiError(error));
+    await handleApiError(response);
   }
 
   return response.json();
