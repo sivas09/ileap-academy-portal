@@ -116,6 +116,28 @@ Recommended rules:
 
 Current Academy portal already follows the schema direction with `APP_DATABASE_SCHEMA=english_portal`. For shared hosting, keep that pattern and standardize names before scaling to more apps.
 
+### Render Dashboard Setup For One Shared Database
+
+Yes, one Render PostgreSQL database can be used by multiple iLEAP projects. The practical setup is:
+
+1. Create or upgrade one paid Render PostgreSQL database, preferably named `ileap-production-db`.
+2. Keep the current Academy service as its own Render web service.
+3. Add the Club member portal as another Render web service in the same Render account.
+4. Add Tech AI later as another Render web service in the same Render account.
+5. Point every private app service to the same PostgreSQL connection string.
+6. Set a different schema per service:
+
+```text
+ileap-english-portal       DATABASE_URL=<same Render Postgres connection>  APP_DATABASE_SCHEMA=english_portal
+ileap-club-member-portal   DATABASE_URL=<same Render Postgres connection>  APP_DATABASE_SCHEMA=club_portal
+ileap-tech-ai-portal       DATABASE_URL=<same Render Postgres connection>  APP_DATABASE_SCHEMA=tech_ai_portal
+ileap-admin-portal         DATABASE_URL=<same Render Postgres connection>  APP_DATABASE_SCHEMA=admin_portal
+```
+
+In Render's dashboard, this means the later services should **not** create their own PostgreSQL database by default. They should reuse the existing production database connection string and isolate app data through `APP_DATABASE_SCHEMA`.
+
+The current `render.yaml` is still Academy-specific because it creates `ileap-english-portal-db`. Do not use that exact database block as the long-term shared-platform blueprint without renaming/upgrading the database and connecting future services to the same shared database.
+
 ### When To Split Databases Later
 
 Move an app to its own PostgreSQL database when any of these become true:
