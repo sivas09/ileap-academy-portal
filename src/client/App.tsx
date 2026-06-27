@@ -728,39 +728,45 @@ function Resources({ resources, products, token }: { resources: Resource[]; prod
   }
 
   async function openResource(resource: Resource) {
-    const response = await fetch(`/api/resources/${resource.id}/open`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    setMessage("");
+    try {
+      const response = await fetch(`/api/resources/${resource.id}/open`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
 
-    if (!response.ok) {
-      if (response.status === 401) {
-        window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
+      if (!response.ok) {
+        if (response.status === 401) {
+          window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
+          return;
+        }
+        const error = await response.json().catch(() => ({ error: "Could not open this resource." }));
+        setMessage(typeof error.error === "string" ? error.error : "Could not open this resource. Ask an admin to check access.");
         return;
       }
-      alert("Could not open this resource. Please sign in again or ask an admin to check access.");
-      return;
-    }
 
-    const contentType = response.headers.get("Content-Type") ?? "";
-    if (contentType.includes("application/json")) {
-      const payload = await response.json() as { type?: string; url?: string };
-      if (payload.type === "url" && payload.url) {
-        window.open(payload.url, "_blank", "noopener,noreferrer");
+      const contentType = response.headers.get("Content-Type") ?? "";
+      if (contentType.includes("application/json")) {
+        const payload = await response.json() as { type?: string; url?: string };
+        if (payload.type === "url" && payload.url) {
+          window.open(payload.url, "_blank", "noopener,noreferrer");
+          return;
+        }
+        setMessage("This resource link is not available.");
         return;
       }
-      alert("This resource link is not available.");
-      return;
-    }
 
-    const blob = await response.blob();
-    const objectUrl = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = objectUrl;
-    anchor.download = filenameFromDisposition(response.headers.get("Content-Disposition"), resource.originalFileName ?? resource.title);
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = filenameFromDisposition(response.headers.get("Content-Disposition"), resource.originalFileName ?? resource.title);
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    } catch {
+      setMessage("Could not open this resource. Check your connection and try again.");
+    }
   }
 
   return (

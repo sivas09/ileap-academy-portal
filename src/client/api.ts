@@ -235,10 +235,10 @@ function formatApiError(error: unknown) {
   return [...formMessages, ...fieldMessages].join("; ") || "Request failed";
 }
 
-async function handleApiError(response: Response): Promise<never> {
+async function handleApiError(response: Response, isAuthenticatedRequest: boolean): Promise<never> {
   const error = await response.json().catch(() => ({ error: "Request failed" }));
 
-  if (response.status === 401) {
+  if (response.status === 401 && isAuthenticatedRequest) {
     window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
     throw new ApiError(SESSION_EXPIRED_MESSAGE, response.status);
   }
@@ -257,7 +257,7 @@ export async function api<T>(path: string, options: RequestInit = {}, token?: st
   });
 
   if (!response.ok) {
-    await handleApiError(response);
+    await handleApiError(response, Boolean(token));
   }
 
   return response.json();
@@ -273,7 +273,7 @@ export async function uploadApi<T>(path: string, formData: FormData, token: stri
   });
 
   if (!response.ok) {
-    await handleApiError(response);
+    await handleApiError(response, true);
   }
 
   return response.json();

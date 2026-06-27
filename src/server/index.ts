@@ -418,7 +418,22 @@ async function assertResourceAccess(resourceId: string, user: AuthUser) {
     include: { topic: true, lesson: { include: { topic: true } } }
   });
   if (!resource) return null;
-  if (user.role === "ADMIN" || user.role === "TEACHER") return resource;
+  if (user.role === "ADMIN") return resource;
+
+  if (user.role === "TEACHER") {
+    const teacher = await prisma.teacherProfile.findUnique({
+      where: { userId: user.id },
+      include: { levels: true }
+    });
+    const allowedLevelIds = new Set(teacher?.levels.map((item) => item.levelId) ?? []);
+    const resourceLevelId = await resolveCurriculumLevelId({
+      levelId: resource.levelId,
+      topicId: resource.topicId,
+      lessonId: resource.lessonId
+    });
+
+    return !resourceLevelId || allowedLevelIds.has(resourceLevelId) ? resource : null;
+  }
 
   const studentLevelId = await getStudentLevelId(user.id);
   const entitlement = await prisma.entitlement.findFirst({
