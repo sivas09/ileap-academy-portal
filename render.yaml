@@ -9,6 +9,8 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: NODE_VERSION
+        value: 22.12.0
       - key: APP_URL
         value: https://english.ileapacademy.com
       - key: DATABASE_URL
