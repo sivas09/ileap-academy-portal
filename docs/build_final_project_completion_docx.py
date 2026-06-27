@@ -369,6 +369,7 @@ def main() -> None:
             ["Server TypeScript build", "npm.cmd run build:server", "Passed"],
             ["Render-style production build", "npm.cmd run render:build", "Passed"],
             ["Production dependency audit", "npm.cmd audit --omit=dev", "Passed, 0 vulnerabilities"],
+            ["Word document visual QA", "Microsoft Word PDF export plus PNG page inspection", "Passed, 6 pages inspected"],
         ],
         [1.85, 2.95, 1.7],
     )
@@ -401,7 +402,7 @@ def main() -> None:
     )
 
     doc.add_heading("13. Recommended Launch Checklist", level=1)
-    add_numbered(
+    add_bullets(
         doc,
         [
             "Upgrade Render PostgreSQL to a paid plan.",

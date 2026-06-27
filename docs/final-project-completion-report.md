@@ -287,6 +287,7 @@ Quality checks completed during this final pass:
 | Server TypeScript build | `npm.cmd run build:server` | Passed |
 | Render-style production build | `npm.cmd run render:build` | Passed |
 | Production dependency audit | `npm.cmd audit --omit=dev` | Passed, 0 vulnerabilities |
+| Word document visual QA | Microsoft Word PDF export plus PNG page inspection | Passed, 6 pages inspected |
 
 The Render build was verified with a PostgreSQL-shaped local placeholder connection string:
 
