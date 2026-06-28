@@ -32,6 +32,10 @@ body {
   background: var(--brand-bg);
 }
 
+.shopPage {
+  background: #f6f7fb;
+}
+
 a {
   color: inherit;
 }
@@ -446,20 +450,109 @@ h3 {
   gap: 16px;
 }
 
+.shopMain {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 38px 28px 72px;
+}
+
+.shopCatalogHeader {
+  padding: 24px 0 28px;
+}
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 18px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.breadcrumb a {
+  color: var(--brand-light-blue);
+  text-decoration: none;
+}
+
+.shopCatalogHeader h1 {
+  max-width: none;
+  margin-bottom: 12px;
+  font-size: clamp(34px, 4.4vw, 56px);
+}
+
+.shopCatalogHeader p {
+  max-width: 720px;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1.58;
+}
+
+.shopToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 22px;
+  border: 1px solid #e6eaf0;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px 16px;
+}
+
+.shopToolbar p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.shopToolbar select {
+  min-height: 42px;
+  border: 1px solid #d9e0ea;
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  padding: 0 36px 0 12px;
+  font: inherit;
+  font-weight: 800;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.catalogGrid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 22px;
+}
+
 .productCard {
   display: flex;
   min-height: 100%;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid var(--line);
+  border: 1px solid #e6eaf0;
   border-radius: 8px;
   background: #ffffff;
-  box-shadow: 0 16px 42px rgba(0, 41, 107, 0.06);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.catalogCard:hover {
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.1);
+  transform: translateY(-2px);
 }
 
 .productImage {
+  position: relative;
   display: grid;
-  min-height: 154px;
+  min-height: 190px;
   place-items: center;
   background: var(--soft-blue);
   color: var(--brand-blue);
@@ -487,20 +580,37 @@ h3 {
 
 .productImage span {
   display: grid;
-  width: 92px;
-  height: 92px;
+  width: 96px;
+  height: 118px;
   place-items: center;
   border: 2px solid currentColor;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.7);
   font-weight: 900;
+  text-align: center;
+}
+
+.productImage .productBadge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: auto;
+  height: auto;
+  border: 0;
+  border-radius: 999px;
+  background: var(--brand-red);
+  color: #ffffff;
+  padding: 7px 10px;
+  font-size: 12px;
+  line-height: 1;
 }
 
 .productBody {
   display: grid;
   flex: 1;
-  gap: 12px;
-  padding: 20px;
+  grid-template-rows: auto auto auto minmax(84px, 1fr) auto auto auto;
+  gap: 10px;
+  padding: 18px;
 }
 
 .productBody h3,
@@ -509,15 +619,31 @@ h3 {
 }
 
 .productCategory {
-  color: var(--brand-red);
-  font-size: 12px;
+  color: #64748b;
+  font-size: 11px;
   font-weight: 900;
   text-transform: uppercase;
 }
 
-.productPrice {
-  color: var(--brand-orange);
+.productBody h3 {
   font-size: 18px;
+  line-height: 1.22;
+}
+
+.rating {
+  color: #f5a623;
+  font-size: 14px;
+  letter-spacing: 1px;
+}
+
+.productBody p {
+  font-size: 14px;
+}
+
+.productPrice {
+  color: var(--brand-blue);
+  font-size: 18px;
+  font-weight: 900;
 }
 
 .productButton,
@@ -529,8 +655,8 @@ h3 {
 }
 
 .buyButton {
-  border-color: var(--brand-green);
-  background: var(--brand-green);
+  border-color: var(--brand-blue);
+  background: var(--brand-blue);
 }
 
 .paymentNote {
@@ -587,9 +713,12 @@ footer a {
   .stepGrid,
   .portalSection,
   .shopHero,
-  .categoryGrid,
-  .productGrid {
+  .categoryGrid {
     grid-template-columns: 1fr;
+  }
+
+  .catalogGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .hero {
@@ -620,9 +749,23 @@ footer a {
   .hero,
   .section,
   .portalSection,
-  .shopHero {
+  .shopHero,
+  .shopMain {
     padding-left: 18px;
     padding-right: 18px;
+  }
+
+  .shopToolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .shopToolbar select {
+    width: 100%;
+  }
+
+  .catalogGrid {
+    grid-template-columns: 1fr;
   }
 
   .heroActions,

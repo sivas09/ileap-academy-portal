@@ -11,7 +11,7 @@
     <link rel="icon" href="./Logo_large.jpg" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
-  <body>
+  <body class="shopPage">
     <header class="siteHeader">
       <a class="brand" href="./index.html" aria-label="iLEAP Academy home">
         <img src="./Logo_large.jpg" alt="iLEAP Academy logo" />
@@ -27,166 +27,132 @@
       </nav>
     </header>
 
-    <main id="top">
-      <section class="shopHero">
-        <div>
-          <p class="eyebrow">Learning Materials</p>
-          <h1>iLEAP Academy Shop</h1>
-          <p class="lead">Books, worksheets, writing resources, and learning tools for students.</p>
-          <div class="heroActions">
-            <a class="primaryButton" href="#products-title">View Materials</a>
-            <a class="secondaryButton" href="mailto:ileap.academy.icat@gmail.com">Contact Us</a>
+    <main class="shopMain" id="top">
+      <section class="shopCatalogHeader" aria-labelledby="shop-title">
+        <nav class="breadcrumb" aria-label="Breadcrumb">
+          <a href="./index.html">Home</a>
+          <span>/</span>
+          <span>Shop</span>
+        </nav>
+        <h1 id="shop-title">iLEAP Academy Shop</h1>
+        <p>Books, worksheets, writing resources, and learning tools for students.</p>
+      </section>
+
+      <section class="shopToolbar" aria-label="Shop controls">
+        <p>Showing 1&ndash;6 of 6 materials</p>
+        <label>
+          <span class="srOnly">Sort products</span>
+          <select aria-label="Default sorting">
+            <option>Default sorting</option>
+          </select>
+        </label>
+      </section>
+
+      <section class="productGrid catalogGrid" aria-label="Featured materials">
+        <article class="productCard catalogCard" data-stripe-payment-link="">
+          <div class="productImage" aria-hidden="true">
+            <span>Book</span>
           </div>
-        </div>
-        <div class="shopHeroPanel" aria-label="Shop availability notice">
-          <strong>Secure checkout with Stripe Payment Links.</strong>
-          <p>
-            Online purchasing will use Stripe-hosted payment pages. Until live payment links are added,
-            please contact iLEAP Academy to request materials.
-          </p>
-        </div>
-      </section>
+          <div class="productBody">
+            <span class="productCategory">English Writing Books</span>
+            <h3>Grade 7&ndash;9 English Essay Writing Book</h3>
+            <div class="rating" aria-label="Rating placeholder">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+            <p>Advanced essay planning, thesis development, paragraph structure, evidence, and revision practice.</p>
+            <strong class="productPrice">Price coming soon</strong>
+            <button class="secondaryButton inactiveButton productButton" type="button">Coming Soon</button>
+            <a class="requestLink" href="mailto:ileap.academy.icat@gmail.com">Request Access</a>
+          </div>
+        </article>
 
-      <section class="section shopSection" aria-labelledby="categories-title">
-        <div class="sectionHeader">
-          <p class="eyebrow">Categories</p>
-          <h2 id="categories-title">Resources for writing, speaking, and learning.</h2>
-        </div>
-        <div class="categoryGrid">
-          <article>English Writing Books</article>
-          <article>Worksheets</article>
-          <article>Essay Writing Resources</article>
-          <article>Public Speaking Resources</article>
-          <article>AI Learning Tools</article>
-          <article>Digital Downloads</article>
-        </div>
-      </section>
+        <article class="productCard catalogCard" data-stripe-payment-link="">
+          <div class="productImage green" aria-hidden="true">
+            <span>Pack</span>
+          </div>
+          <div class="productBody">
+            <span class="productCategory">Worksheets</span>
+            <h3>Grade 5&ndash;6 Writing Practice Pack</h3>
+            <div class="rating" aria-label="Rating placeholder">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+            <p>Guided paragraph writing, grammar review, vocabulary building, and short essay practice.</p>
+            <strong class="productPrice">Price coming soon</strong>
+            <button class="secondaryButton inactiveButton productButton" type="button">Coming Soon</button>
+            <a class="requestLink" href="mailto:ileap.academy.icat@gmail.com">Request Access</a>
+          </div>
+        </article>
 
-      <section class="section shopSection" aria-labelledby="products-title">
-        <div class="sectionHeader">
-          <p class="eyebrow">Featured Materials</p>
-          <h2 id="products-title">Learning materials for students.</h2>
-          <p>
-            These products are set up for Stripe Payment Links. Products without a live payment link show Coming Soon.
-          </p>
-        </div>
+        <article class="productCard catalogCard" data-stripe-payment-link="">
+          <div class="productImage orange" aria-hidden="true">
+            <span>OSSLT</span>
+          </div>
+          <div class="productBody">
+            <span class="productCategory">Essay Writing Resources</span>
+            <h3>OSSLT Writing Preparation Pack</h3>
+            <div class="rating" aria-label="Rating placeholder">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+            <p>Practice prompts, planning templates, response organization, and editing support for test readiness.</p>
+            <strong class="productPrice">Price coming soon</strong>
+            <button class="secondaryButton inactiveButton productButton" type="button">Coming Soon</button>
+            <a class="requestLink" href="mailto:ileap.academy.icat@gmail.com">Request Access</a>
+          </div>
+        </article>
 
-        <!-- For live products, replace the inactive button with:
-             <a class="primaryButton productButton" href="https://buy.stripe.com/..." target="_blank" rel="noopener">Buy Now</a> -->
-        <div class="productGrid">
-          <article class="productCard" data-stripe-payment-link="">
-            <div class="productImage" aria-hidden="true">
-              <span>Book</span>
-            </div>
-            <div class="productBody">
-              <span class="productCategory">English Writing Books</span>
-              <h3>Grade 7&ndash;9 English Essay Writing Book</h3>
-              <p>Advanced essay planning, thesis development, paragraph structure, evidence, and revision practice.</p>
-              <strong class="productPrice">Price coming soon</strong>
-              <button class="secondaryButton inactiveButton productButton" type="button">Coming Soon</button>
-              <a class="requestLink" href="mailto:ileap.academy.icat@gmail.com">Request Access</a>
-            </div>
-          </article>
+        <article class="productCard catalogCard" data-stripe-payment-link="">
+          <div class="productImage red" aria-hidden="true">
+            <span>Speak</span>
+          </div>
+          <div class="productBody">
+            <span class="productCategory">Public Speaking Resources</span>
+            <h3>Public Speaking Starter Kit</h3>
+            <div class="rating" aria-label="Rating placeholder">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+            <p>Speech planning worksheets, delivery checklists, confidence drills, and presentation practice tools.</p>
+            <strong class="productPrice">Price coming soon</strong>
+            <button class="secondaryButton inactiveButton productButton" type="button">Coming Soon</button>
+            <a class="requestLink" href="mailto:ileap.academy.icat@gmail.com">Request Access</a>
+          </div>
+        </article>
 
-          <article class="productCard" data-stripe-payment-link="">
-            <div class="productImage green" aria-hidden="true">
-              <span>Pack</span>
-            </div>
-            <div class="productBody">
-              <span class="productCategory">Worksheets</span>
-              <h3>Grade 5&ndash;6 Writing Practice Pack</h3>
-              <p>Guided paragraph writing, grammar review, vocabulary building, and short essay practice.</p>
-              <strong class="productPrice">Price coming soon</strong>
-              <button class="secondaryButton inactiveButton productButton" type="button">Coming Soon</button>
-              <a class="requestLink" href="mailto:ileap.academy.icat@gmail.com">Request Access</a>
-            </div>
-          </article>
+        <article class="productCard catalogCard" data-stripe-payment-link="">
+          <div class="productImage blue" aria-hidden="true">
+            <span>Debate</span>
+          </div>
+          <div class="productBody">
+            <span class="productCategory">Digital Downloads</span>
+            <h3>Debate and Leadership Workbook</h3>
+            <div class="rating" aria-label="Rating placeholder">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+            <p>Argument structure, rebuttal practice, speaking frameworks, and leadership reflection activities.</p>
+            <strong class="productPrice">Price coming soon</strong>
+            <button class="secondaryButton inactiveButton productButton" type="button">Coming Soon</button>
+            <a class="requestLink" href="mailto:ileap.academy.icat@gmail.com">Request Access</a>
+          </div>
+        </article>
 
-          <article class="productCard" data-stripe-payment-link="">
-            <div class="productImage orange" aria-hidden="true">
-              <span>OSSLT</span>
-            </div>
-            <div class="productBody">
-              <span class="productCategory">Essay Writing Resources</span>
-              <h3>OSSLT Writing Preparation Pack</h3>
-              <p>Practice prompts, planning templates, response organization, and editing support for test readiness.</p>
-              <strong class="productPrice">Price coming soon</strong>
-              <button class="secondaryButton inactiveButton productButton" type="button">Coming Soon</button>
-              <a class="requestLink" href="mailto:ileap.academy.icat@gmail.com">Request Access</a>
-            </div>
-          </article>
-
-          <article class="productCard" data-stripe-payment-link="">
-            <div class="productImage red" aria-hidden="true">
-              <span>Speak</span>
-            </div>
-            <div class="productBody">
-              <span class="productCategory">Public Speaking Resources</span>
-              <h3>Public Speaking Starter Kit</h3>
-              <p>Speech planning worksheets, delivery checklists, confidence drills, and presentation practice tools.</p>
-              <strong class="productPrice">Price coming soon</strong>
-              <button class="secondaryButton inactiveButton productButton" type="button">Coming Soon</button>
-              <a class="requestLink" href="mailto:ileap.academy.icat@gmail.com">Request Access</a>
-            </div>
-          </article>
-
-          <article class="productCard" data-stripe-payment-link="">
-            <div class="productImage blue" aria-hidden="true">
-              <span>Debate</span>
-            </div>
-            <div class="productBody">
-              <span class="productCategory">Digital Downloads</span>
-              <h3>Debate and Leadership Workbook</h3>
-              <p>Argument structure, rebuttal practice, speaking frameworks, and leadership reflection activities.</p>
-              <strong class="productPrice">Price coming soon</strong>
-              <button class="secondaryButton inactiveButton productButton" type="button">Coming Soon</button>
-              <a class="requestLink" href="mailto:ileap.academy.icat@gmail.com">Request Access</a>
-            </div>
-          </article>
-
-          <article
-            class="productCard"
-            data-product-id="Vocabulary_Bank_Grades_3_5_iLEAP"
-            data-stripe-payment-link="https://buy.stripe.com/aFa00iaiTe65g7A94P8so00"
-          >
-            <div class="productImage green" aria-hidden="true">
-              <span>Vocab</span>
-            </div>
-            <div class="productBody">
-              <span class="productCategory">Book / Digital Download</span>
-              <h3>iLEAP Vocabulary Bank (Grades 3&ndash;5)</h3>
-              <p>
-                Digital vocabulary workbook for Grades 3&ndash;5 students to build stronger word choice,
-                spelling, sentence fluency, and writing confidence.
-              </p>
-              <strong class="productPrice">$1 CAD</strong>
-              <a
-                class="primaryButton productButton buyButton"
-                href="https://buy.stripe.com/aFa00iaiTe65g7A94P8so00"
-                target="_blank"
-                rel="noopener"
-              >
-                Buy Now &ndash; $1 CAD
-              </a>
-              <p class="paymentNote">Payments are securely processed by Stripe.</p>
-            </div>
-          </article>
-        </div>
-      </section>
-
-      <section class="portalSection shopCta">
-        <div>
-          <p class="eyebrow">Request Materials</p>
-          <h2>Need a book, worksheet pack, or learning resource?</h2>
-          <p>
-            Stripe Payment Links can be added directly to these product cards when checkout is ready.
-            For now, please contact iLEAP Academy to request materials.
-          </p>
-        </div>
-        <div class="ctaActions">
-          <a class="primaryButton" href="mailto:ileap.academy.icat@gmail.com">Request Learning Materials</a>
-          <a class="secondaryButton" href="mailto:ileap.academy.icat@gmail.com">Contact Us</a>
-        </div>
+        <article
+          class="productCard catalogCard"
+          data-product-id="Vocabulary_Bank_Grades_3_5_iLEAP"
+          data-stripe-payment-link="https://buy.stripe.com/aFa00iaiTe65g7A94P8so00"
+        >
+          <div class="productImage green" aria-hidden="true">
+            <span class="productBadge">Featured</span>
+            <span>Vocab</span>
+          </div>
+          <div class="productBody">
+            <span class="productCategory">Book / Digital Download</span>
+            <h3>iLEAP Vocabulary Bank (Grades 3&ndash;5)</h3>
+            <div class="rating" aria-label="Rating placeholder">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+            <p>
+              Digital vocabulary workbook for Grades 3&ndash;5 students to build stronger word choice,
+              spelling, sentence fluency, and writing confidence.
+            </p>
+            <strong class="productPrice">$1 CAD</strong>
+            <a
+              class="primaryButton productButton buyButton"
+              href="https://buy.stripe.com/aFa00iaiTe65g7A94P8so00"
+              target="_blank"
+              rel="noopener"
+            >
+              Buy Now &ndash; $1 CAD
+            </a>
+            <p class="paymentNote">Payments are securely processed by Stripe.</p>
+          </div>
+        </article>
       </section>
     </main>
 
