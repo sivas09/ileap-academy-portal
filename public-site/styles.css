@@ -528,6 +528,19 @@ h3 {
   font-size: 15px;
 }
 
+.buyButton {
+  border-color: var(--brand-green);
+  background: var(--brand-green);
+}
+
+.paymentNote {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+  text-align: center;
+}
+
 .requestLink {
   color: var(--brand-light-blue);
   font-size: 14px;
