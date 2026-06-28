@@ -2828,11 +2828,14 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
           <input placeholder="Image URL" value={product.imageUrl} onChange={(event) => setProduct({ ...product, imageUrl: event.target.value })} />
           <input placeholder="Badge, e.g. Featured" value={product.badge} onChange={(event) => setProduct({ ...product, badge: event.target.value })} />
           <input placeholder="Rating label, e.g. ★★★★★" value={product.ratingLabel} onChange={(event) => setProduct({ ...product, ratingLabel: event.target.value })} />
-          <select value={product.status} onChange={(event) => setProduct({ ...product, status: event.target.value as Product["status"] })}>
-            <option value="DRAFT">Draft</option>
-            <option value="PUBLISHED">Published</option>
-            <option value="ARCHIVED">Archived</option>
-          </select>
+          <label>
+            Status: Draft / Published / Archived
+            <select value={product.status} onChange={(event) => setProduct({ ...product, status: event.target.value as Product["status"], isActive: event.target.value === "PUBLISHED" ? true : event.target.value === "ARCHIVED" ? false : product.isActive })}>
+              <option value="DRAFT">Draft</option>
+              <option value="PUBLISHED">Published</option>
+              <option value="ARCHIVED">Archived</option>
+            </select>
+          </label>
           <input placeholder="Sort order" value={product.sortOrder} onChange={(event) => setProduct({ ...product, sortOrder: event.target.value })} />
           <select value={product.type} onChange={(event) => setProduct({ ...product, type: event.target.value })}>
             <option value="INDIVIDUAL">Individual</option>
@@ -2858,7 +2861,7 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
           </div>
           <label className="inlineCheck">
             <input type="checkbox" checked={product.isActive} onChange={(event) => setProduct({ ...product, isActive: event.target.checked })} />
-            Active in legacy portal checkout
+            Active in shop: {product.isActive ? "Yes" : "No"}
           </label>
           <button className="primary" onClick={createProduct}><ShoppingCart size={18} /> Create product</button>
         </div>
@@ -2990,7 +2993,7 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
                     <small className={item.status === "PUBLISHED" ? "statusPill activeStatus" : item.status === "ARCHIVED" ? "statusPill dangerStatus" : "statusPill pendingStatus"}>{item.status}</small>
                     {item.badge && <small className="statusPill">{item.badge}</small>}
                     {item.stripePaymentLink && <small className="statusPill activeStatus">Stripe link</small>}
-                    <small className={item.isActive ? "statusPill activeStatus" : "statusPill"}>{item.isActive ? "Portal active" : "Portal inactive"}</small>
+                    <small className={item.isActive ? "statusPill activeStatus" : "statusPill"}>{item.isActive ? "Active in shop" : "Inactive in shop"}</small>
                     {item.resources?.map((row) => <small className="statusPill" key={row.resource.id}>{row.resource.title}</small>)}
                   </div>
                 </div>
@@ -3006,11 +3009,14 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
                     <input placeholder="Image URL" value={draft.imageUrl} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], imageUrl: event.target.value } }))} />
                     <input placeholder="Badge" value={draft.badge} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], badge: event.target.value } }))} />
                     <input placeholder="Rating label" value={draft.ratingLabel} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], ratingLabel: event.target.value } }))} />
-                    <select value={draft.status} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], status: event.target.value as Product["status"] } }))}>
-                      <option value="DRAFT">Draft</option>
-                      <option value="PUBLISHED">Published</option>
-                      <option value="ARCHIVED">Archived</option>
-                    </select>
+                    <label>
+                      Status: Draft / Published / Archived
+                      <select value={draft.status} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], status: event.target.value as Product["status"], isActive: event.target.value === "PUBLISHED" ? true : event.target.value === "ARCHIVED" ? false : current[item.id].isActive } }))}>
+                        <option value="DRAFT">Draft</option>
+                        <option value="PUBLISHED">Published</option>
+                        <option value="ARCHIVED">Archived</option>
+                      </select>
+                    </label>
                     <input placeholder="Sort order" value={draft.sortOrder} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], sortOrder: event.target.value } }))} />
                     <select value={draft.type} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], type: event.target.value as Product["type"] } }))}>
                       <option value="INDIVIDUAL">Individual</option>
@@ -3032,7 +3038,7 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
                     </div>
                     <label className="inlineCheck">
                       <input type="checkbox" checked={draft.isActive} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], isActive: event.target.checked } }))} />
-                      Active in legacy portal checkout
+                      Active in shop: {draft.isActive ? "Yes" : "No"}
                     </label>
                     <div className="buttonRow">
                       <button className="primary" onClick={() => updateProduct(item.id)}><Save size={18} /> Save product</button>

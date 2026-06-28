@@ -296,7 +296,7 @@ async function main() {
       type: "INDIVIDUAL",
       priceCents: 100,
       currency: "cad",
-      isActive: false
+      isActive: true
     }
   });
 

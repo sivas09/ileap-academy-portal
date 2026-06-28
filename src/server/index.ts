@@ -1676,6 +1676,7 @@ app.post("/api/admin/products", requireAuth, requireActiveAccount, requireRole("
 
   const data = normalizeProductInput(input.data);
   const resourceIds = data.resourceIds ?? [];
+  const isActive = data.status === "PUBLISHED" ? true : data.status === "ARCHIVED" ? false : data.isActive;
 
   if (resourceIds.length > 0) {
     const resources = await prisma.resource.findMany({ where: { id: { in: resourceIds } } });
@@ -1705,7 +1706,7 @@ app.post("/api/admin/products", requireAuth, requireActiveAccount, requireRole("
         priceCents: data.priceCents,
         currency: data.currency ?? "cad",
         levelId: data.levelId,
-        isActive: data.isActive,
+        isActive,
         resources: resourceIds.length > 0
           ? { create: resourceIds.map((resourceId) => ({ resourceId })) }
           : undefined
@@ -1738,6 +1739,7 @@ app.put("/api/admin/products/:id", requireAuth, requireActiveAccount, requireRol
   }
 
   const data = normalizeProductInput(input.data);
+  const isActive = data.status === "PUBLISHED" ? true : data.status === "ARCHIVED" ? false : data.isActive;
 
   if (data.resourceIds) {
     const resources = await prisma.resource.findMany({ where: { id: { in: data.resourceIds } } });
@@ -1768,7 +1770,7 @@ app.put("/api/admin/products/:id", requireAuth, requireActiveAccount, requireRol
         priceCents: data.priceCents,
         currency: data.currency,
         levelId: data.levelId,
-        isActive: data.isActive,
+        isActive,
         resources: data.resourceIds
           ? {
               deleteMany: {},
