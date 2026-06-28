@@ -47,7 +47,7 @@
       </section>
 
       <section class="shopToolbar" aria-label="Shop controls">
-        <p>Showing 1&ndash;6 of 6 materials</p>
+        <p id="productCount">Loading shop materials...</p>
         <label>
           <span class="srOnly">Sort products</span>
           <select aria-label="Default sorting">
@@ -66,7 +66,7 @@
         <span>AI Tools</span>
       </section>
 
-      <section class="productGrid catalogGrid" aria-label="Featured materials">
+      <section class="productGrid catalogGrid" id="productGrid" aria-label="Featured materials">
         <article class="productCard catalogCard" data-stripe-payment-link="">
           <div class="productImage coverBlue" aria-hidden="true">
             <span class="productBadge badgeNavy">Book</span>
@@ -244,5 +244,105 @@
       <a href="./index.html">Home</a>
       <a href="https://english.ileapacademy.com/">Student Portal</a>
     </footer>
+    <script>
+      const grid = document.getElementById("productGrid");
+      const productCount = document.getElementById("productCount");
+      const stripeUrlPattern = /^https:\/\/buy\.stripe\.com\//;
+
+      function escapeHtml(value) {
+        return String(value ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      }
+
+      function coverClass(product) {
+        const source = `${product.badge ?? ""} ${product.category ?? ""}`.toLowerCase();
+        if (source.includes("speaking")) return "coverRed";
+        if (source.includes("worksheet")) return "coverGreen";
+        if (source.includes("debate")) return "coverLightBlue";
+        if (source.includes("digital")) return "coverFeatured";
+        if (source.includes("book")) return "coverBlue";
+        return "coverOrange";
+      }
+
+      function badgeClass(product) {
+        const source = `${product.badge ?? ""} ${product.category ?? ""}`.toLowerCase();
+        if (source.includes("featured")) return "badgeFeatured";
+        if (source.includes("speaking")) return "badgeRed";
+        if (source.includes("worksheet")) return "badgeGreen";
+        if (source.includes("debate")) return "badgeLightBlue";
+        if (source.includes("digital")) return "badgeDigital";
+        if (source.includes("book")) return "badgeNavy";
+        return "badgeOrange";
+      }
+
+      function coverMarkup(product) {
+        if (product.imageUrl) {
+          return `<img class="productCoverImage" src="${escapeHtml(product.imageUrl)}" alt="">`;
+        }
+
+        const titleWords = String(product.title ?? "iLEAP Resource").split(/\s+/).slice(0, 3).join(" ");
+        return `
+          <div class="coverArt">
+            <small>iLEAP Academy</small>
+            <strong>${escapeHtml(titleWords)}</strong>
+            <em>${escapeHtml(product.category || "Learning Tool")}</em>
+          </div>
+        `;
+      }
+
+      function productCard(product) {
+        const hasStripeLink = product.stripePaymentLink && stripeUrlPattern.test(product.stripePaymentLink);
+        const badge = product.badge || product.category || "iLEAP";
+        const action = hasStripeLink
+          ? `<a class="primaryButton productButton buyButton" href="${escapeHtml(product.stripePaymentLink)}" target="_blank" rel="noopener">Buy Now${product.priceLabel ? ` &ndash; ${escapeHtml(product.priceLabel)}` : ""}</a>
+             <p class="paymentNote">Payments are securely processed by Stripe.</p>`
+          : `<button class="secondaryButton inactiveButton productButton" type="button" disabled>Coming Soon</button>
+             <a class="requestLink" href="mailto:ileap.academy.icat@gmail.com">Request Preview</a>`;
+
+        return `
+          <article class="productCard catalogCard" data-product-id="${escapeHtml(product.slug || product.id)}">
+            <div class="productImage ${coverClass(product)}" aria-hidden="true">
+              <span class="productBadge ${badgeClass(product)}">${escapeHtml(badge)}</span>
+              ${coverMarkup(product)}
+            </div>
+            <div class="productBody">
+              <span class="productCategory">${escapeHtml(product.category)}</span>
+              <h3>${escapeHtml(product.title)}</h3>
+              <div class="rating" aria-label="Rating placeholder">${escapeHtml(product.ratingLabel || "★★★★★")}</div>
+              <p class="productDescription">${escapeHtml(product.shortDescription || product.description)}</p>
+              <div class="productFooter">
+                <strong class="productPrice">${escapeHtml(product.priceLabel || "Coming soon")}</strong>
+                ${action}
+              </div>
+            </div>
+          </article>
+        `;
+      }
+
+      async function loadProducts() {
+        try {
+          const response = await fetch("/api/products", { headers: { Accept: "application/json" } });
+          if (!response.ok) throw new Error("Product API unavailable");
+          const products = await response.json();
+          if (!Array.isArray(products) || products.length === 0) {
+            grid.innerHTML = '<section class="shopUnavailable">Shop products are temporarily unavailable. Please contact iLEAP Academy.</section>';
+            productCount.textContent = "Showing 0 materials";
+            return;
+          }
+
+          grid.innerHTML = products.map(productCard).join("");
+          productCount.textContent = `Showing 1-${products.length} of ${products.length} materials`;
+        } catch {
+          grid.innerHTML = '<section class="shopUnavailable">Shop products are temporarily unavailable. Please contact iLEAP Academy.</section>';
+          productCount.textContent = "Shop products unavailable";
+        }
+      }
+
+      loadProducts();
+    </script>
   </body>
 </html>

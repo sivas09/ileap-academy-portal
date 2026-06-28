@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { AccessMode, AccountStatus, PrismaClient, Resource, Role } from "@prisma/client";
+import { AccessMode, AccountStatus, PrismaClient, Product, Resource, Role } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import cors from "cors";
 import crypto from "crypto";
@@ -264,6 +264,13 @@ function productResourceForClient<T extends { resource: Resource }>(item: T) {
   return {
     ...item,
     resource: resourceForClient(item.resource, false)
+  };
+}
+
+function productForClient<T extends Product & { resources?: Array<{ resource: Resource }> }>(product: T) {
+  return {
+    ...product,
+    resources: product.resources?.map(productResourceForClient) ?? []
   };
 }
 
@@ -558,19 +565,39 @@ const lessonSchema = z.object({
 });
 
 const productSchema = z.object({
-  title: z.string().min(2),
-  description: z.string().min(2),
-  type: z.enum(["INDIVIDUAL", "BUNDLE"]),
-  priceCents: z.coerce.number().int().min(50),
-  currency: z.string().min(3).max(3).default("usd"),
+  title: z.string().trim().min(2),
+  slug: z.string().trim().min(2).max(140).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Use lowercase letters, numbers, and hyphens only."),
+  category: z.string().trim().min(1).max(120),
+  description: z.string().trim().min(2),
+  shortDescription: z.string().trim().min(2).max(500),
+  priceLabel: z.string().trim().min(1).max(80),
+  stripePaymentLink: z.string().trim().url().optional().nullable().or(z.literal("")),
+  imageUrl: z.string().trim().url().optional().nullable().or(z.literal("")),
+  badge: z.string().trim().max(80).optional().nullable(),
+  ratingLabel: z.string().trim().max(40).default("★★★★★"),
+  status: z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]).default("DRAFT"),
+  sortOrder: z.coerce.number().int().min(0).default(100),
+  type: z.enum(["INDIVIDUAL", "BUNDLE"]).default("INDIVIDUAL"),
+  priceCents: z.coerce.number().int().min(0).default(0),
+  currency: z.string().min(3).max(3).default("cad"),
   levelId: z.string().optional().nullable(),
-  resourceIds: z.array(z.string()).min(1),
-  isActive: z.boolean().default(true)
+  resourceIds: z.array(z.string()).default([]),
+  isActive: z.boolean().default(false)
 });
 
 const productUpdateSchema = productSchema.partial().extend({
-  resourceIds: z.array(z.string()).min(1).optional()
+  resourceIds: z.array(z.string()).optional()
 });
+
+function normalizeProductInput(input: z.infer<typeof productUpdateSchema>) {
+  return {
+    ...input,
+    stripePaymentLink: input.stripePaymentLink || null,
+    imageUrl: input.imageUrl || null,
+    badge: input.badge || null,
+    currency: input.currency?.toLowerCase()
+  };
+}
 
 const submissionSchema = z.object({
   studentId: z.string().optional(),
@@ -681,14 +708,20 @@ app.get("/api/public/site-content", async (_req, res) => {
 
 app.get("/api/public/products", async (_req, res) => {
   const products = await prisma.product.findMany({
-    where: { isActive: true },
+    where: { status: "PUBLISHED" },
     include: { level: true, resources: { include: { resource: true } } },
-    orderBy: { createdAt: "desc" }
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }]
   });
-  res.json(products.map((product) => ({
-    ...product,
-    resources: product.resources.map(productResourceForClient)
-  })));
+  res.json(products.map(productForClient));
+});
+
+app.get("/api/products", async (_req, res) => {
+  const products = await prisma.product.findMany({
+    where: { status: "PUBLISHED" },
+    include: { level: true, resources: { include: { resource: true } } },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }]
+  });
+  res.json(products.map(productForClient));
 });
 
 app.get("/api/public/curriculum", async (_req, res) => {
@@ -1562,6 +1595,14 @@ app.delete("/api/admin/assignments/:id", requireAuth, requireActiveAccount, requ
   res.json({ ok: true });
 });
 
+app.get("/api/admin/products", requireAuth, requireActiveAccount, requireRole("ADMIN"), async (_req, res) => {
+  const products = await prisma.product.findMany({
+    include: { level: true, resources: { include: { resource: true } } },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }]
+  });
+  res.json(products.map(productForClient));
+});
+
 app.post("/api/admin/products", requireAuth, requireActiveAccount, requireRole("ADMIN"), async (req, res) => {
   const input = productSchema.safeParse(req.body);
   if (!input.success) {
@@ -1569,30 +1610,54 @@ app.post("/api/admin/products", requireAuth, requireActiveAccount, requireRole("
     return;
   }
 
-  const resources = await prisma.resource.findMany({ where: { id: { in: input.data.resourceIds } } });
-  if (resources.length !== input.data.resourceIds.length) {
-    res.status(400).json({ error: "One or more selected resources do not exist" });
-    return;
+  const data = normalizeProductInput(input.data);
+  const resourceIds = data.resourceIds ?? [];
+
+  if (resourceIds.length > 0) {
+    const resources = await prisma.resource.findMany({ where: { id: { in: resourceIds } } });
+    if (resources.length !== resourceIds.length) {
+      res.status(400).json({ error: "One or more selected resources do not exist" });
+      return;
+    }
   }
 
-  const product = await prisma.product.create({
-    data: {
-      title: input.data.title,
-      description: input.data.description,
-      type: input.data.type,
-      priceCents: input.data.priceCents,
-      currency: input.data.currency.toLowerCase(),
-      levelId: input.data.levelId,
-      isActive: input.data.isActive,
-      resources: {
-        create: input.data.resourceIds.map((resourceId) => ({ resourceId }))
-      }
-    },
-    include: { level: true, resources: { include: { resource: true } } }
-  });
+  let product;
+  try {
+    product = await prisma.product.create({
+      data: {
+        title: data.title!,
+        slug: data.slug!,
+        category: data.category!,
+        description: data.description!,
+        shortDescription: data.shortDescription!,
+        priceLabel: data.priceLabel!,
+        stripePaymentLink: data.stripePaymentLink,
+        imageUrl: data.imageUrl,
+        badge: data.badge,
+        ratingLabel: data.ratingLabel,
+        status: data.status,
+        sortOrder: data.sortOrder,
+        type: data.type,
+        priceCents: data.priceCents,
+        currency: data.currency ?? "cad",
+        levelId: data.levelId,
+        isActive: data.isActive,
+        resources: resourceIds.length > 0
+          ? { create: resourceIds.map((resourceId) => ({ resourceId })) }
+          : undefined
+      },
+      include: { level: true, resources: { include: { resource: true } } }
+    });
+  } catch (err) {
+    if (isUniqueConstraintError(err)) {
+      res.status(409).json({ error: "A product with this slug already exists." });
+      return;
+    }
+    throw err;
+  }
 
-  await writeAudit(req.user?.id, "CREATE", "Product", product.id, { title: product.title, priceCents: product.priceCents });
-  res.status(201).json(product);
+  await writeAudit(req.user?.id, "CREATE", "Product", product.id, { title: product.title, slug: product.slug, status: product.status });
+  res.status(201).json(productForClient(product));
 });
 
 app.put("/api/admin/products/:id", requireAuth, requireActiveAccount, requireRole("ADMIN"), async (req, res) => {
@@ -1608,36 +1673,97 @@ app.put("/api/admin/products/:id", requireAuth, requireActiveAccount, requireRol
     return;
   }
 
-  if (input.data.resourceIds) {
-    const resources = await prisma.resource.findMany({ where: { id: { in: input.data.resourceIds } } });
-    if (resources.length !== input.data.resourceIds.length) {
+  const data = normalizeProductInput(input.data);
+
+  if (data.resourceIds) {
+    const resources = await prisma.resource.findMany({ where: { id: { in: data.resourceIds } } });
+    if (resources.length !== data.resourceIds.length) {
       res.status(400).json({ error: "One or more selected resources do not exist" });
       return;
     }
   }
 
+  let product;
+  try {
+    product = await prisma.product.update({
+      where: { id: existing.id },
+      data: {
+        title: data.title,
+        slug: data.slug,
+        category: data.category,
+        description: data.description,
+        shortDescription: data.shortDescription,
+        priceLabel: data.priceLabel,
+        stripePaymentLink: data.stripePaymentLink,
+        imageUrl: data.imageUrl,
+        badge: data.badge,
+        ratingLabel: data.ratingLabel,
+        status: data.status,
+        sortOrder: data.sortOrder,
+        type: data.type,
+        priceCents: data.priceCents,
+        currency: data.currency,
+        levelId: data.levelId,
+        isActive: data.isActive,
+        resources: data.resourceIds
+          ? {
+              deleteMany: {},
+              create: data.resourceIds.map((resourceId) => ({ resourceId }))
+            }
+          : undefined
+      },
+      include: { level: true, resources: { include: { resource: true } } }
+    });
+  } catch (err) {
+    if (isUniqueConstraintError(err)) {
+      res.status(409).json({ error: "A product with this slug already exists." });
+      return;
+    }
+    throw err;
+  }
+
+  await writeAudit(req.user?.id, "UPDATE", "Product", product.id, { title: product.title, slug: product.slug, status: product.status });
+  res.json(productForClient(product));
+});
+
+app.delete("/api/admin/products/:id", requireAuth, requireActiveAccount, requireRole("ADMIN"), async (req, res) => {
+  const existing = await prisma.product.findUnique({ where: { id: String(req.params.id) } });
+  if (!existing) {
+    res.status(404).json({ error: "Product not found" });
+    return;
+  }
+
   const product = await prisma.product.update({
     where: { id: existing.id },
     data: {
-      title: input.data.title,
-      description: input.data.description,
-      type: input.data.type,
-      priceCents: input.data.priceCents,
-      currency: input.data.currency?.toLowerCase(),
-      levelId: input.data.levelId,
-      isActive: input.data.isActive,
-      resources: input.data.resourceIds
-        ? {
-            deleteMany: {},
-            create: input.data.resourceIds.map((resourceId) => ({ resourceId }))
-          }
-        : undefined
+      status: "ARCHIVED",
+      isActive: false
     },
     include: { level: true, resources: { include: { resource: true } } }
   });
 
-  await writeAudit(req.user?.id, "UPDATE", "Product", product.id, { title: product.title, priceCents: product.priceCents });
-  res.json(product);
+  await writeAudit(req.user?.id, "DELETE", "Product", product.id, { archived: true, title: product.title });
+  res.json(productForClient(product));
+});
+
+app.post("/api/admin/products/:id/archive", requireAuth, requireActiveAccount, requireRole("ADMIN"), async (req, res) => {
+  const existing = await prisma.product.findUnique({ where: { id: String(req.params.id) } });
+  if (!existing) {
+    res.status(404).json({ error: "Product not found" });
+    return;
+  }
+
+  const product = await prisma.product.update({
+    where: { id: existing.id },
+    data: {
+      status: "ARCHIVED",
+      isActive: false
+    },
+    include: { level: true, resources: { include: { resource: true } } }
+  });
+
+  await writeAudit(req.user?.id, "DELETE", "Product", product.id, { archived: true, title: product.title });
+  res.json(productForClient(product));
 });
 
 app.get("/api/admin/orders", requireAuth, requireActiveAccount, requireRole("ADMIN"), async (_req, res) => {
@@ -1735,6 +1861,15 @@ app.post("/api/shop/checkout", requireAuth, requireActiveAccount, requireRole("S
     success_url: `${appUrl}/?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${appUrl}/?checkout=cancelled`
   });
+
+  if (!session.url) {
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { status: "FAILED" }
+    });
+    res.status(502).json({ error: "Stripe did not return a checkout URL. Please try again or contact iLEAP Academy." });
+    return;
+  }
 
   await prisma.order.update({
     where: { id: order.id },

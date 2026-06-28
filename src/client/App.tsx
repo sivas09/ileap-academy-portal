@@ -16,7 +16,7 @@ import {
   UserRound,
   Video
 } from "lucide-react";
-import { AdminUser, AiPrompt, api, Assignment, DashboardData, Level, money, OrderHistory, Product, Resource, ReviewStudent, ReviewSubmission, SESSION_EXPIRED_EVENT, SESSION_EXPIRED_MESSAGE, Session, SiteContent, uploadApi } from "./api";
+import { AdminUser, AiPrompt, api, Assignment, DashboardData, Level, money, OrderHistory, Product, PublicProduct, Resource, ReviewStudent, ReviewSubmission, SESSION_EXPIRED_EVENT, SESSION_EXPIRED_MESSAGE, Session, SiteContent, uploadApi } from "./api";
 
 type NavItem = [string, React.ComponentType<{ size?: number }>, string];
 type FeedbackPayload = Record<string, string | number | null | string[] | undefined>;
@@ -122,12 +122,24 @@ export function App() {
 
 function PublicSite({ onLogin, sessionMessage }: { onLogin: (session: Session) => void; sessionMessage?: string }) {
   const [levels, setLevels] = useState<Level[]>([]);
+  const [products, setProducts] = useState<PublicProduct[]>([]);
   const [content, setContent] = useState<SiteContent>(defaultSiteContent);
+  const [publicView, setPublicView] = useState(() => window.location.hash === "#shop" ? "shop" : "home");
   const resetToken = new URLSearchParams(window.location.search).get("resetToken");
 
   useEffect(() => {
     api<Level[]>("/public/levels").then(setLevels).catch(() => setLevels([]));
+    api<PublicProduct[]>("/public/products").then(setProducts).catch(() => setProducts([]));
     api<SiteContent>("/public/site-content").then(setContent).catch(() => setContent(defaultSiteContent));
+  }, []);
+
+  useEffect(() => {
+    function syncHash() {
+      setPublicView(window.location.hash === "#shop" ? "shop" : "home");
+    }
+
+    window.addEventListener("hashchange", syncHash);
+    return () => window.removeEventListener("hashchange", syncHash);
   }, []);
 
   return (
@@ -138,9 +150,16 @@ function PublicSite({ onLogin, sessionMessage }: { onLogin: (session: Session) =
           <span>iLEAP Academy</span>
         </div>
         <div className="navActions">
+          <a className={publicView === "home" ? "portalAccessBadge activeLink" : "portalAccessBadge"} href="#top">Program</a>
+          <a className={publicView === "shop" ? "portalAccessBadge activeLink" : "portalAccessBadge"} href="#shop">Shop</a>
           <a className="portalAccessBadge" href="https://www.ileapacademy.com/">Main Website</a>
         </div>
       </nav>
+
+      {publicView === "shop" ? (
+        <PublicShop products={products} />
+      ) : (
+      <>
 
       <section className="hero">
         <div className="heroCopy">
@@ -148,6 +167,10 @@ function PublicSite({ onLogin, sessionMessage }: { onLogin: (session: Session) =
           <h1>{content.heroTitle}</h1>
           <p>{content.heroSubtitle}</p>
           {content.announcement && <div className="announcement">{content.announcement}</div>}
+          <div className="heroActions">
+            <a className="primary" href="#shop"><ShoppingCart size={18} /> Browse Shop</a>
+            <a className="secondary" href="#levels">Explore Levels</a>
+          </div>
           <div className="heroStats">
             <span>Grade 2/3</span>
             <span>Grade 4/5/6</span>
@@ -222,6 +245,28 @@ function PublicSite({ onLogin, sessionMessage }: { onLogin: (session: Session) =
         </div>
       </section>
 
+      <section className="publicSection publicShopPreview" id="shop-preview">
+        <div className="sectionHeader">
+          <span className="eyebrow">Shop</span>
+          <h2>Workbooks and writing resources for enrolled students.</h2>
+          <p>Preview available products, then sign in to purchase through secure Stripe checkout and unlock resources in the portal.</p>
+        </div>
+        <div className="productPreviewGrid">
+          {products.slice(0, 3).map((product) => (
+            <article className="shopCard" key={product.id}>
+              <div className="shopCardTop">
+                <span className="statusPill">{product.level?.gradeBand ?? "All levels"}</span>
+                <strong>{money(product.priceCents)}</strong>
+              </div>
+              <h3>{product.title}</h3>
+              <p>{product.description}</p>
+              <a className="secondary" href="#shop">View product</a>
+            </article>
+          ))}
+          {products.length === 0 && <p className="empty">Products will appear here after an admin adds them in the portal.</p>}
+        </div>
+      </section>
+
       <section className="publicSection splitSection">
         <div>
           <span className="eyebrow">Access</span>
@@ -268,7 +313,82 @@ function PublicSite({ onLogin, sessionMessage }: { onLogin: (session: Session) =
         </div>
         <a className="primary contactButton" href="mailto:ileap.academy.icat@gmail.com">Email iLEAP Academy</a>
       </section>
+      </>
+      )}
     </main>
+  );
+}
+
+function PublicShop({ products }: { products: PublicProduct[] }) {
+  const [levelFilter, setLevelFilter] = useState("all");
+  const levels = Array.from(new Map(products.filter((product) => product.level).map((product) => [product.level!.id, product.level!])).values());
+  const filteredProducts = levelFilter === "all" ? products : products.filter((product) => product.level?.id === levelFilter);
+
+  return (
+    <section className="publicShopPage" id="shop">
+      <div className="shopHero">
+        <div>
+          <span className="eyebrow">iLEAP Academy Shop</span>
+          <h1>Books, worksheets, and level-based writing resources.</h1>
+          <p>
+            Browse available learning products. Students sign in before checkout so purchased resources unlock automatically inside their portal account.
+          </p>
+          <div className="heroStats">
+            <span>Secure Stripe checkout</span>
+            <span>Portal resource unlock</span>
+            <span>One-time purchases</span>
+          </div>
+        </div>
+        <section className="shopHelpBox">
+          <strong>How buying works</strong>
+          <ol>
+            <li>Choose the workbook or bundle for the student's level.</li>
+            <li>Sign in to the student portal.</li>
+            <li>Pay through Stripe and return to unlocked resources.</li>
+          </ol>
+          <a className="primary" href="#top">Sign in to buy</a>
+        </section>
+      </div>
+
+      <div className="shopToolbar">
+        <div>
+          <strong>{filteredProducts.length}</strong>
+          <span>{filteredProducts.length === 1 ? " product" : " products"} available</span>
+        </div>
+        <label>
+          Level
+          <select value={levelFilter} onChange={(event) => setLevelFilter(event.target.value)}>
+            <option value="all">All levels</option>
+            {levels.map((level) => <option key={level.id} value={level.id}>{level.gradeBand}</option>)}
+          </select>
+        </label>
+      </div>
+
+      <div className="publicShopGrid">
+        {filteredProducts.length === 0 && (
+          <section className="panel wide">
+            <p className="empty">No active shop products are available yet. Admins can add products from the portal Admin page.</p>
+          </section>
+        )}
+        {filteredProducts.map((product) => (
+          <article className="shopCard publicProductCard" key={product.id}>
+            <div className="shopCardTop">
+              <span className="statusPill">{product.level?.gradeBand ?? "All levels"}</span>
+              <strong>{money(product.priceCents)}</strong>
+            </div>
+            <h2>{product.title}</h2>
+            <p>{product.description}</p>
+            {product.resources && product.resources.length > 0 && (
+              <div className="includedList">
+                <span>Includes</span>
+                {product.resources.map((item) => <small key={item.resource.id}>{item.resource.title}</small>)}
+              </div>
+            )}
+            <a className="primary" href="#top"><ShoppingCart size={18} /> Sign in to checkout</a>
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -1958,13 +2078,32 @@ type ResourceDraft = {
 
 type ProductDraft = {
   title: string;
+  slug: string;
+  category: string;
   description: string;
+  shortDescription: string;
+  priceLabel: string;
+  stripePaymentLink: string;
+  imageUrl: string;
+  badge: string;
+  ratingLabel: string;
+  status: Product["status"];
+  sortOrder: string;
   type: Product["type"];
   priceDollars: string;
   levelId: string;
   resourceIds: string[];
   isActive: boolean;
 };
+
+function slugifyProductTitle(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    || `product-${Date.now()}`;
+}
 
 function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: DashboardData; token: string; role: Session["user"]["role"]; onChange: () => Promise<void>; onResourceSaved: () => void }) {
   const [resource, setResource] = useState({
@@ -2019,12 +2158,22 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
   });
   const [product, setProduct] = useState({
     title: "",
+    slug: "",
+    category: "Book / Digital Download",
     description: "",
+    shortDescription: "",
+    priceLabel: "$1 CAD",
+    stripePaymentLink: "",
+    imageUrl: "",
+    badge: "Featured",
+    ratingLabel: "★★★★★",
+    status: "DRAFT" as Product["status"],
+    sortOrder: "100",
     type: "INDIVIDUAL",
-    priceDollars: "29.00",
-    levelId: data.levels[0]?.id ?? "",
+    priceDollars: "0.00",
+    levelId: "",
     resourceIds: [] as string[],
-    isActive: true
+    isActive: false
   });
   const [resourceDrafts, setResourceDrafts] = useState<Record<string, ResourceDraft>>({});
   const [productDrafts, setProductDrafts] = useState<Record<string, ProductDraft>>({});
@@ -2160,9 +2309,20 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
           method: "POST",
           body: JSON.stringify({
             title: resource.title,
+            slug: slugifyProductTitle(resource.title),
+            category: "Portal Resource",
             description: resource.description,
+            shortDescription: resource.description,
+            priceLabel: `$${resourcePriceDollars} USD`,
+            stripePaymentLink: null,
+            imageUrl: null,
+            badge: resource.type === "WORKSHEET" ? "Worksheet" : "Book",
+            ratingLabel: "★★★★★",
+            status: "DRAFT",
+            sortOrder: 100,
             type: resource.accessMode === "BUNDLE_PURCHASE" ? "BUNDLE" : "INDIVIDUAL",
             priceCents,
+            currency: "usd",
             levelId: resource.levelId || null,
             resourceIds: [savedResource.id],
             isActive: true
@@ -2224,10 +2384,7 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
   async function createProduct() {
     setMessage("");
     setError("");
-    if (product.resourceIds.length === 0) {
-      setError("Select at least one resource for the product.");
-      return;
-    }
+    const priceCents = Math.round(Number(product.priceDollars) * 100);
     try {
       await api(
         "/admin/products",
@@ -2235,9 +2392,20 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
           method: "POST",
           body: JSON.stringify({
             title: product.title,
+            slug: product.slug || slugifyProductTitle(product.title),
+            category: product.category,
             description: product.description,
+            shortDescription: product.shortDescription,
+            priceLabel: product.priceLabel,
+            stripePaymentLink: product.stripePaymentLink || null,
+            imageUrl: product.imageUrl || null,
+            badge: product.badge || null,
+            ratingLabel: product.ratingLabel,
+            status: product.status,
+            sortOrder: Number(product.sortOrder),
             type: product.type,
-            priceCents: Math.round(Number(product.priceDollars) * 100),
+            priceCents: Number.isFinite(priceCents) ? priceCents : 0,
+            currency: product.priceLabel.toLowerCase().includes("cad") ? "cad" : "usd",
             levelId: product.levelId || null,
             resourceIds: product.resourceIds,
             isActive: product.isActive
@@ -2245,7 +2413,16 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
         },
         token
       );
-      setProduct({ ...product, title: "", description: "", resourceIds: [] });
+      setProduct({
+        ...product,
+        title: "",
+        slug: "",
+        description: "",
+        shortDescription: "",
+        stripePaymentLink: "",
+        imageUrl: "",
+        resourceIds: []
+      });
       setMessage("Product saved.");
       onChange();
       loadOrders();
@@ -2259,7 +2436,17 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
       ...current,
       [product.id]: current[product.id] ?? {
         title: product.title,
+        slug: product.slug,
+        category: product.category,
         description: product.description,
+        shortDescription: product.shortDescription,
+        priceLabel: product.priceLabel || (product.priceCents ? money(product.priceCents, product.currency) : "Coming soon"),
+        stripePaymentLink: product.stripePaymentLink ?? "",
+        imageUrl: product.imageUrl ?? "",
+        badge: product.badge ?? "",
+        ratingLabel: product.ratingLabel ?? "★★★★★",
+        status: product.status,
+        sortOrder: String(product.sortOrder),
         type: product.type,
         priceDollars: (product.priceCents / 100).toFixed(2),
         levelId: product.level?.id ?? "",
@@ -2289,14 +2476,6 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
     const draft = productDrafts[productId];
     if (!draft) return;
     const priceCents = Math.round(Number(draft.priceDollars) * 100);
-    if (!Number.isFinite(priceCents) || priceCents < 50) {
-      setError("Enter a valid product price of at least $0.50.");
-      return;
-    }
-    if (draft.resourceIds.length === 0) {
-      setError("Select at least one resource for this product.");
-      return;
-    }
     setMessage("");
     setError("");
     try {
@@ -2304,9 +2483,20 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
         method: "PUT",
         body: JSON.stringify({
           title: draft.title,
+          slug: draft.slug || slugifyProductTitle(draft.title),
+          category: draft.category,
           description: draft.description,
+          shortDescription: draft.shortDescription,
+          priceLabel: draft.priceLabel,
+          stripePaymentLink: draft.stripePaymentLink || null,
+          imageUrl: draft.imageUrl || null,
+          badge: draft.badge || null,
+          ratingLabel: draft.ratingLabel,
+          status: draft.status,
+          sortOrder: Number(draft.sortOrder),
           type: draft.type,
-          priceCents,
+          priceCents: Number.isFinite(priceCents) ? priceCents : 0,
+          currency: draft.priceLabel.toLowerCase().includes("cad") ? "cad" : "usd",
           levelId: draft.levelId || null,
           resourceIds: draft.resourceIds,
           isActive: draft.isActive
@@ -2316,6 +2506,37 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
       onChange();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update product");
+    }
+  }
+
+  async function archiveProduct(productId: string) {
+    if (!window.confirm("Archive this product? It will be removed from the public shop.")) return;
+    setMessage("");
+    setError("");
+    try {
+      await api(`/admin/products/${productId}`, { method: "DELETE" }, token);
+      setMessage("Product archived.");
+      onChange();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not archive product");
+    }
+  }
+
+  async function setProductStatus(productId: string, status: Product["status"]) {
+    setMessage("");
+    setError("");
+    try {
+      await api(`/admin/products/${productId}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          status,
+          isActive: status === "ARCHIVED" ? false : undefined
+        })
+      }, token);
+      setMessage(status === "PUBLISHED" ? "Product published." : status === "DRAFT" ? "Product unpublished." : "Product archived.");
+      onChange();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update product status");
     }
   }
 
@@ -2387,9 +2608,20 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
             method: "PUT",
             body: JSON.stringify({
               title: draft.title,
+              slug: slugifyProductTitle(draft.title),
+              category: "Portal Resource",
               description: draft.description,
+              shortDescription: draft.description,
+              priceLabel: `$${draft.priceDollars} USD`,
+              stripePaymentLink: null,
+              imageUrl: null,
+              badge: draft.type === "WORKSHEET" ? "Worksheet" : "Book",
+              ratingLabel: "★★★★★",
+              status: "DRAFT",
+              sortOrder: 100,
               type: draft.accessMode === "BUNDLE_PURCHASE" ? "BUNDLE" : "INDIVIDUAL",
               priceCents,
+              currency: "usd",
               levelId: draft.levelId || null,
               resourceIds: [resource.id],
               isActive: draft.productActive
@@ -2400,9 +2632,20 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
             method: "POST",
             body: JSON.stringify({
               title: draft.title,
+              slug: slugifyProductTitle(draft.title),
+              category: "Portal Resource",
               description: draft.description,
+              shortDescription: draft.description,
+              priceLabel: `$${draft.priceDollars} USD`,
+              stripePaymentLink: null,
+              imageUrl: null,
+              badge: draft.type === "WORKSHEET" ? "Worksheet" : "Book",
+              ratingLabel: "★★★★★",
+              status: "DRAFT",
+              sortOrder: 100,
               type: draft.accessMode === "BUNDLE_PURCHASE" ? "BUNDLE" : "INDIVIDUAL",
               priceCents,
+              currency: "usd",
               levelId: draft.levelId || null,
               resourceIds: [resource.id],
               isActive: true
@@ -2573,19 +2816,35 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
         </div>
       </section>
       <section className="panel">
-        <h3>Create Product</h3>
+        <h3>Admin Shop / Products</h3>
         <div className="form compact">
-          <input placeholder="Product title" value={product.title} onChange={(event) => setProduct({ ...product, title: event.target.value })} />
-          <textarea placeholder="Product description" value={product.description} onChange={(event) => setProduct({ ...product, description: event.target.value })} />
+          <input placeholder="Title" value={product.title} onChange={(event) => setProduct({ ...product, title: event.target.value, slug: product.slug || slugifyProductTitle(event.target.value) })} />
+          <input placeholder="Slug, e.g. ileap-vocabulary-bank-grades-3-5" value={product.slug} onChange={(event) => setProduct({ ...product, slug: event.target.value })} />
+          <input placeholder="Category" value={product.category} onChange={(event) => setProduct({ ...product, category: event.target.value })} />
+          <textarea placeholder="Short description" value={product.shortDescription} onChange={(event) => setProduct({ ...product, shortDescription: event.target.value })} />
+          <textarea placeholder="Full description" value={product.description} onChange={(event) => setProduct({ ...product, description: event.target.value })} />
+          <input placeholder="Price label, e.g. $1 CAD" value={product.priceLabel} onChange={(event) => setProduct({ ...product, priceLabel: event.target.value })} />
+          <input placeholder="Stripe Payment Link" value={product.stripePaymentLink} onChange={(event) => setProduct({ ...product, stripePaymentLink: event.target.value })} />
+          <input placeholder="Image URL" value={product.imageUrl} onChange={(event) => setProduct({ ...product, imageUrl: event.target.value })} />
+          <input placeholder="Badge, e.g. Featured" value={product.badge} onChange={(event) => setProduct({ ...product, badge: event.target.value })} />
+          <input placeholder="Rating label, e.g. ★★★★★" value={product.ratingLabel} onChange={(event) => setProduct({ ...product, ratingLabel: event.target.value })} />
+          <select value={product.status} onChange={(event) => setProduct({ ...product, status: event.target.value as Product["status"] })}>
+            <option value="DRAFT">Draft</option>
+            <option value="PUBLISHED">Published</option>
+            <option value="ARCHIVED">Archived</option>
+          </select>
+          <input placeholder="Sort order" value={product.sortOrder} onChange={(event) => setProduct({ ...product, sortOrder: event.target.value })} />
           <select value={product.type} onChange={(event) => setProduct({ ...product, type: event.target.value })}>
             <option value="INDIVIDUAL">Individual</option>
             <option value="BUNDLE">Bundle</option>
           </select>
-          <input placeholder="Price, e.g. 29.00" value={product.priceDollars} onChange={(event) => setProduct({ ...product, priceDollars: event.target.value })} />
+          <input placeholder="Legacy portal price amount, e.g. 1.00" value={product.priceDollars} onChange={(event) => setProduct({ ...product, priceDollars: event.target.value })} />
           <select value={product.levelId} onChange={(event) => setProduct({ ...product, levelId: event.target.value })}>
+            <option value="">All levels</option>
             {data.levels.map((level) => <option key={level.id} value={level.id}>{level.gradeBand}</option>)}
           </select>
           <div className="resourceChecklist">
+            <span>Optional portal resources for future delivery</span>
             {data.resources.map((resource) => (
               <label key={resource.id}>
                 <input
@@ -2597,6 +2856,10 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
               </label>
             ))}
           </div>
+          <label className="inlineCheck">
+            <input type="checkbox" checked={product.isActive} onChange={(event) => setProduct({ ...product, isActive: event.target.checked })} />
+            Active in legacy portal checkout
+          </label>
           <button className="primary" onClick={createProduct}><ShoppingCart size={18} /> Create product</button>
         </div>
       </section>
@@ -2713,7 +2976,7 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
     </section>
     {role === "ADMIN" && (
       <section className="panel adminWide">
-        <h3>Manage Products</h3>
+        <h3>Shop / Products</h3>
         <div className="managementList">
           {data.products.length === 0 && <p className="empty">No products yet.</p>}
           {data.products.map((item) => {
@@ -2722,26 +2985,44 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
               <article className="managementRow" key={item.id} onMouseEnter={() => ensureProductDraft(item)}>
                 <div>
                   <strong>{item.title}</strong>
-                  <span>{item.level?.gradeBand ?? "All levels"} | {item.type} | {money(item.priceCents)}</span>
+                  <span>{item.category} | {item.priceLabel || money(item.priceCents, item.currency)} | Sort {item.sortOrder}</span>
                   <div className="statusRow">
-                    <small className={item.isActive ? "statusPill activeStatus" : "statusPill dangerStatus"}>{item.isActive ? "Active" : "Inactive"}</small>
+                    <small className={item.status === "PUBLISHED" ? "statusPill activeStatus" : item.status === "ARCHIVED" ? "statusPill dangerStatus" : "statusPill pendingStatus"}>{item.status}</small>
+                    {item.badge && <small className="statusPill">{item.badge}</small>}
+                    {item.stripePaymentLink && <small className="statusPill activeStatus">Stripe link</small>}
+                    <small className={item.isActive ? "statusPill activeStatus" : "statusPill"}>{item.isActive ? "Portal active" : "Portal inactive"}</small>
                     {item.resources?.map((row) => <small className="statusPill" key={row.resource.id}>{row.resource.title}</small>)}
                   </div>
                 </div>
                 {draft ? (
                   <div className="managementEditor">
-                    <input value={draft.title} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], title: event.target.value } }))} />
-                    <textarea value={draft.description} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], description: event.target.value } }))} />
+                    <input placeholder="Title" value={draft.title} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], title: event.target.value } }))} />
+                    <input placeholder="Slug" value={draft.slug} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], slug: event.target.value } }))} />
+                    <input placeholder="Category" value={draft.category} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], category: event.target.value } }))} />
+                    <textarea placeholder="Short description" value={draft.shortDescription} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], shortDescription: event.target.value } }))} />
+                    <textarea placeholder="Full description" value={draft.description} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], description: event.target.value } }))} />
+                    <input placeholder="Price label" value={draft.priceLabel} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], priceLabel: event.target.value } }))} />
+                    <input placeholder="Stripe Payment Link" value={draft.stripePaymentLink} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], stripePaymentLink: event.target.value } }))} />
+                    <input placeholder="Image URL" value={draft.imageUrl} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], imageUrl: event.target.value } }))} />
+                    <input placeholder="Badge" value={draft.badge} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], badge: event.target.value } }))} />
+                    <input placeholder="Rating label" value={draft.ratingLabel} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], ratingLabel: event.target.value } }))} />
+                    <select value={draft.status} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], status: event.target.value as Product["status"] } }))}>
+                      <option value="DRAFT">Draft</option>
+                      <option value="PUBLISHED">Published</option>
+                      <option value="ARCHIVED">Archived</option>
+                    </select>
+                    <input placeholder="Sort order" value={draft.sortOrder} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], sortOrder: event.target.value } }))} />
                     <select value={draft.type} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], type: event.target.value as Product["type"] } }))}>
                       <option value="INDIVIDUAL">Individual</option>
                       <option value="BUNDLE">Bundle</option>
                     </select>
-                    <input value={draft.priceDollars} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], priceDollars: event.target.value } }))} />
+                    <input placeholder="Legacy portal price amount" value={draft.priceDollars} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], priceDollars: event.target.value } }))} />
                     <select value={draft.levelId} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], levelId: event.target.value } }))}>
                       <option value="">All levels</option>
                       {data.levels.map((level) => <option key={level.id} value={level.id}>{level.gradeBand}</option>)}
                     </select>
                     <div className="resourceChecklist">
+                      <span>Optional portal resources for future delivery</span>
                       {data.resources.map((resource) => (
                         <label key={resource.id}>
                           <input type="checkbox" checked={draft.resourceIds.includes(resource.id)} onChange={() => toggleDraftProductResource(item.id, resource.id)} />
@@ -2751,14 +3032,19 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
                     </div>
                     <label className="inlineCheck">
                       <input type="checkbox" checked={draft.isActive} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], isActive: event.target.checked } }))} />
-                      Active in shop
+                      Active in legacy portal checkout
                     </label>
                     <div className="buttonRow">
                       <button className="primary" onClick={() => updateProduct(item.id)}><Save size={18} /> Save product</button>
+                      <button className="secondary dangerButton" onClick={() => archiveProduct(item.id)}><Trash2 size={18} /> Archive</button>
                     </div>
                   </div>
                 ) : (
-                  <button className="secondary" onClick={() => ensureProductDraft(item)}>Edit product</button>
+                  <div className="buttonRow">
+                    <button className="secondary" onClick={() => ensureProductDraft(item)}>Edit product</button>
+                    <button className="secondary" onClick={() => setProductStatus(item.id, item.status === "PUBLISHED" ? "DRAFT" : "PUBLISHED")}>{item.status === "PUBLISHED" ? "Unpublish" : "Publish"}</button>
+                    <button className="secondary dangerButton" onClick={() => archiveProduct(item.id)}>Archive</button>
+                  </div>
                 )}
               </article>
             );

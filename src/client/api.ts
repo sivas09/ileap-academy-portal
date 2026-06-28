@@ -80,7 +80,17 @@ export type Assignment = {
 export type Product = {
   id: string;
   title: string;
+  slug: string;
+  category: string;
   description: string;
+  shortDescription: string;
+  priceLabel: string;
+  stripePaymentLink?: string | null;
+  imageUrl?: string | null;
+  badge?: string | null;
+  ratingLabel: string;
+  status: "DRAFT" | "PUBLISHED" | "ARCHIVED";
+  sortOrder: number;
   type: "INDIVIDUAL" | "BUNDLE";
   priceCents: number;
   currency: string;
@@ -89,6 +99,8 @@ export type Product = {
   isPurchased?: boolean;
   resources?: Array<{ resource: Resource }>;
 };
+
+export type PublicProduct = Product;
 
 export type OrderHistory = {
   id: string;
@@ -279,8 +291,8 @@ export async function uploadApi<T>(path: string, formData: FormData, token: stri
   return response.json();
 }
 
-export const money = (cents: number) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
+export const money = (cents: number, currency = "USD") =>
+  new Intl.NumberFormat("en-US", { style: "currency", currency: currency.toUpperCase() }).format(cents / 100);
 
 export const dateTime = (value: string) =>
   new Intl.DateTimeFormat("en-US", {

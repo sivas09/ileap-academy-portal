@@ -39,6 +39,12 @@ enum ProductType {
   BUNDLE
 }
 
+enum ProductStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
 enum OrderStatus {
   PENDING
   PAID
@@ -257,9 +263,19 @@ model AiFeedback {
 model Product {
   id              String            @id @default(cuid())
   title           String
+  slug            String            @unique @default(cuid())
+  category        String            @default("General")
   description     String
-  type            ProductType
-  priceCents      Int
+  shortDescription String           @default("")
+  priceLabel      String            @default("")
+  stripePaymentLink String?
+  imageUrl        String?
+  badge           String?
+  ratingLabel     String            @default("★★★★★")
+  status          ProductStatus     @default(DRAFT)
+  sortOrder       Int               @default(100)
+  type            ProductType       @default(INDIVIDUAL)
+  priceCents      Int               @default(0)
   currency        String            @default("usd")
   levelId         String?
   level           Level?            @relation(fields: [levelId], references: [id], onDelete: SetNull)
@@ -270,6 +286,8 @@ model Product {
   orderItems      OrderItem[]
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
+
+  @@index([status, sortOrder])
 }
 
 model ProductResource {

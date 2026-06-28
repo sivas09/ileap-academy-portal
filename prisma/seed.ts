@@ -260,13 +260,43 @@ async function main() {
   await prisma.product.create({
     data: {
       title: "Essay Mastery Workbook",
+      slug: "essay-mastery-workbook",
+      category: "English Writing Books",
       description: "One-time purchase for the Grade 7/8/9 workbook.",
+      shortDescription: "One-time purchase for the Grade 7/8/9 workbook.",
+      priceLabel: "$29.00 USD",
+      badge: "Book",
+      ratingLabel: "★★★★★",
+      status: "DRAFT",
+      sortOrder: 100,
       type: "INDIVIDUAL",
       priceCents: 2900,
       levelId: essayMastery.id,
       resources: {
         create: [{ resourceId: resources[3].id }]
       }
+    }
+  });
+
+  await prisma.product.create({
+    data: {
+      title: "iLEAP Vocabulary Bank (Grades 3–5)",
+      slug: "ileap-vocabulary-bank-grades-3-5",
+      category: "Book / Digital Download",
+      description:
+        "Digital vocabulary workbook for Grades 3–5 students to build stronger word choice, spelling, sentence fluency, and writing confidence.",
+      shortDescription:
+        "Digital vocabulary workbook for Grades 3–5 students to build stronger word choice, spelling, sentence fluency, and writing confidence.",
+      priceLabel: "$1 CAD",
+      stripePaymentLink: "https://buy.stripe.com/aFa00iaiTe65g7A94P8so00",
+      badge: "Featured",
+      ratingLabel: "★★★★★",
+      status: "PUBLISHED",
+      sortOrder: 1,
+      type: "INDIVIDUAL",
+      priceCents: 100,
+      currency: "cad",
+      isActive: false
     }
   });
 
