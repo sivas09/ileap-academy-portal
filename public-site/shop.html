@@ -67,74 +67,79 @@
           <p class="eyebrow">Featured Materials</p>
           <h2 id="products-title">Learning materials for students.</h2>
           <p>
-            These products are set up for Stripe Payment Links. Replace each placeholder with the live Stripe checkout URL
-            when the product is ready for online purchase.
+            These products are set up for Stripe Payment Links. Products without a live payment link show Coming Soon.
           </p>
         </div>
 
-        <!-- Replace each inactive payment button with a live Stripe Payment Link anchor when ready. -->
+        <!-- For live products, replace the inactive button with:
+             <a class="primaryButton productButton" href="https://buy.stripe.com/..." target="_blank" rel="noopener">Buy Now</a> -->
         <div class="productGrid">
-          <article class="productCard">
+          <article class="productCard" data-stripe-payment-link="">
             <div class="productImage" aria-hidden="true">
               <span>Book</span>
             </div>
             <div class="productBody">
+              <span class="productCategory">English Writing Books</span>
               <h3>Grade 7&ndash;9 English Essay Writing Book</h3>
               <p>Advanced essay planning, thesis development, paragraph structure, evidence, and revision practice.</p>
-              <strong class="pricePlaceholder">Stripe price link pending</strong>
-              <button class="secondaryButton inactiveButton" type="button">Payment Link Coming Soon</button>
+              <strong class="productPrice">Price coming soon</strong>
+              <button class="secondaryButton inactiveButton productButton" type="button">Coming Soon</button>
               <a class="requestLink" href="mailto:ileap.academy.icat@gmail.com">Request Access</a>
             </div>
           </article>
 
-          <article class="productCard">
+          <article class="productCard" data-stripe-payment-link="">
             <div class="productImage green" aria-hidden="true">
               <span>Pack</span>
             </div>
             <div class="productBody">
+              <span class="productCategory">Worksheets</span>
               <h3>Grade 5&ndash;6 Writing Practice Pack</h3>
               <p>Guided paragraph writing, grammar review, vocabulary building, and short essay practice.</p>
-              <strong class="pricePlaceholder">Stripe price link pending</strong>
-              <button class="secondaryButton inactiveButton" type="button">Payment Link Coming Soon</button>
+              <strong class="productPrice">Price coming soon</strong>
+              <button class="secondaryButton inactiveButton productButton" type="button">Coming Soon</button>
               <a class="requestLink" href="mailto:ileap.academy.icat@gmail.com">Request Access</a>
             </div>
           </article>
 
-          <article class="productCard">
+          <article class="productCard" data-stripe-payment-link="">
             <div class="productImage orange" aria-hidden="true">
               <span>OSSLT</span>
             </div>
             <div class="productBody">
+              <span class="productCategory">Essay Writing Resources</span>
               <h3>OSSLT Writing Preparation Pack</h3>
               <p>Practice prompts, planning templates, response organization, and editing support for test readiness.</p>
-              <strong class="pricePlaceholder">Stripe price link pending</strong>
-              <button class="secondaryButton inactiveButton" type="button">Payment Link Coming Soon</button>
+              <strong class="productPrice">Price coming soon</strong>
+              <button class="secondaryButton inactiveButton productButton" type="button">Coming Soon</button>
               <a class="requestLink" href="mailto:ileap.academy.icat@gmail.com">Request Access</a>
             </div>
           </article>
 
-          <article class="productCard">
+          <article class="productCard" data-stripe-payment-link="">
             <div class="productImage red" aria-hidden="true">
               <span>Speak</span>
             </div>
             <div class="productBody">
+              <span class="productCategory">Public Speaking Resources</span>
               <h3>Public Speaking Starter Kit</h3>
               <p>Speech planning worksheets, delivery checklists, confidence drills, and presentation practice tools.</p>
-              <strong class="pricePlaceholder">Stripe price link pending</strong>
-              <button class="secondaryButton inactiveButton" type="button">Payment Link Coming Soon</button>
+              <strong class="productPrice">Price coming soon</strong>
+              <button class="secondaryButton inactiveButton productButton" type="button">Coming Soon</button>
               <a class="requestLink" href="mailto:ileap.academy.icat@gmail.com">Request Access</a>
             </div>
           </article>
 
-          <article class="productCard">
+          <article class="productCard" data-stripe-payment-link="">
             <div class="productImage blue" aria-hidden="true">
               <span>Debate</span>
             </div>
             <div class="productBody">
+              <span class="productCategory">Digital Downloads</span>
               <h3>Debate and Leadership Workbook</h3>
               <p>Argument structure, rebuttal practice, speaking frameworks, and leadership reflection activities.</p>
-              <strong class="pricePlaceholder">Stripe price link pending</strong>
-              <button class="secondaryButton inactiveButton" type="button">Payment Link Coming Soon</button>
+              <strong class="productPrice">Price coming soon</strong>
+              <button class="secondaryButton inactiveButton productButton" type="button">Coming Soon</button>
               <a class="requestLink" href="mailto:ileap.academy.icat@gmail.com">Request Access</a>
             </div>
           </article>

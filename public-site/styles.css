@@ -508,10 +508,19 @@ h3 {
   margin-bottom: 0;
 }
 
-.pricePlaceholder {
-  color: var(--brand-orange);
+.productCategory {
+  color: var(--brand-red);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
 }
 
+.productPrice {
+  color: var(--brand-orange);
+  font-size: 18px;
+}
+
+.productButton,
 .productBody .secondaryButton {
   align-self: end;
   width: 100%;
