@@ -2083,9 +2083,12 @@ type ProductDraft = {
   description: string;
   shortDescription: string;
   priceLabel: string;
+  regularPriceLabel: string;
+  salePriceLabel: string;
   stripePaymentLink: string;
   imageUrl: string;
   badge: string;
+  saleBadge: string;
   ratingLabel: string;
   status: Product["status"];
   sortOrder: string;
@@ -2163,9 +2166,12 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
     description: "",
     shortDescription: "",
     priceLabel: "$1 CAD",
+    regularPriceLabel: "",
+    salePriceLabel: "",
     stripePaymentLink: "",
     imageUrl: "",
     badge: "Featured",
+    saleBadge: "",
     ratingLabel: "★★★★★",
     status: "DRAFT" as Product["status"],
     sortOrder: "100",
@@ -2397,9 +2403,12 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
             description: product.description,
             shortDescription: product.shortDescription,
             priceLabel: product.priceLabel,
+            regularPriceLabel: product.regularPriceLabel || null,
+            salePriceLabel: product.salePriceLabel || null,
             stripePaymentLink: product.stripePaymentLink || null,
             imageUrl: product.imageUrl || null,
             badge: product.badge || null,
+            saleBadge: product.saleBadge || null,
             ratingLabel: product.ratingLabel,
             status: product.status,
             sortOrder: Number(product.sortOrder),
@@ -2419,8 +2428,11 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
         slug: "",
         description: "",
         shortDescription: "",
+        regularPriceLabel: "",
+        salePriceLabel: "",
         stripePaymentLink: "",
         imageUrl: "",
+        saleBadge: "",
         resourceIds: []
       });
       setMessage("Product saved.");
@@ -2441,9 +2453,12 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
         description: product.description,
         shortDescription: product.shortDescription,
         priceLabel: product.priceLabel || (product.priceCents ? money(product.priceCents, product.currency) : "Coming soon"),
+        regularPriceLabel: product.regularPriceLabel ?? "",
+        salePriceLabel: product.salePriceLabel ?? "",
         stripePaymentLink: product.stripePaymentLink ?? "",
         imageUrl: product.imageUrl ?? "",
         badge: product.badge ?? "",
+        saleBadge: product.saleBadge ?? "",
         ratingLabel: product.ratingLabel ?? "★★★★★",
         status: product.status,
         sortOrder: String(product.sortOrder),
@@ -2488,9 +2503,12 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
           description: draft.description,
           shortDescription: draft.shortDescription,
           priceLabel: draft.priceLabel,
+          regularPriceLabel: draft.regularPriceLabel || null,
+          salePriceLabel: draft.salePriceLabel || null,
           stripePaymentLink: draft.stripePaymentLink || null,
           imageUrl: draft.imageUrl || null,
           badge: draft.badge || null,
+          saleBadge: draft.saleBadge || null,
           ratingLabel: draft.ratingLabel,
           status: draft.status,
           sortOrder: Number(draft.sortOrder),
@@ -2824,9 +2842,12 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
           <textarea placeholder="Short description" value={product.shortDescription} onChange={(event) => setProduct({ ...product, shortDescription: event.target.value })} />
           <textarea placeholder="Full description" value={product.description} onChange={(event) => setProduct({ ...product, description: event.target.value })} />
           <input placeholder="Price label, e.g. $1 CAD" value={product.priceLabel} onChange={(event) => setProduct({ ...product, priceLabel: event.target.value })} />
+          <input placeholder="Regular price, e.g. $9.99" value={product.regularPriceLabel} onChange={(event) => setProduct({ ...product, regularPriceLabel: event.target.value })} />
+          <input placeholder="Sale price, e.g. $4.99" value={product.salePriceLabel} onChange={(event) => setProduct({ ...product, salePriceLabel: event.target.value })} />
           <input placeholder="Stripe Payment Link" value={product.stripePaymentLink} onChange={(event) => setProduct({ ...product, stripePaymentLink: event.target.value })} />
           <input placeholder="Image URL" value={product.imageUrl} onChange={(event) => setProduct({ ...product, imageUrl: event.target.value })} />
           <input placeholder="Badge, e.g. Featured" value={product.badge} onChange={(event) => setProduct({ ...product, badge: event.target.value })} />
+          <input placeholder="Sale badge, e.g. Sale" value={product.saleBadge} onChange={(event) => setProduct({ ...product, saleBadge: event.target.value })} />
           <input placeholder="Rating label, e.g. ★★★★★" value={product.ratingLabel} onChange={(event) => setProduct({ ...product, ratingLabel: event.target.value })} />
           <label>
             Status: Draft / Published / Archived
@@ -3005,9 +3026,12 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
                     <textarea placeholder="Short description" value={draft.shortDescription} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], shortDescription: event.target.value } }))} />
                     <textarea placeholder="Full description" value={draft.description} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], description: event.target.value } }))} />
                     <input placeholder="Price label" value={draft.priceLabel} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], priceLabel: event.target.value } }))} />
+                    <input placeholder="Regular price, e.g. $9.99" value={draft.regularPriceLabel} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], regularPriceLabel: event.target.value } }))} />
+                    <input placeholder="Sale price, e.g. $4.99" value={draft.salePriceLabel} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], salePriceLabel: event.target.value } }))} />
                     <input placeholder="Stripe Payment Link" value={draft.stripePaymentLink} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], stripePaymentLink: event.target.value } }))} />
                     <input placeholder="Image URL" value={draft.imageUrl} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], imageUrl: event.target.value } }))} />
                     <input placeholder="Badge" value={draft.badge} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], badge: event.target.value } }))} />
+                    <input placeholder="Sale badge, e.g. Sale" value={draft.saleBadge} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], saleBadge: event.target.value } }))} />
                     <input placeholder="Rating label" value={draft.ratingLabel} onChange={(event) => setProductDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], ratingLabel: event.target.value } }))} />
                     <label>
                       Status: Draft / Published / Archived

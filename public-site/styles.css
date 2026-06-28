@@ -754,6 +754,7 @@ h3 {
   right: 12px;
 }
 
+.badgeSale,
 .badgeFeatured,
 .badgeRed {
   background: var(--brand-red) !important;
@@ -824,6 +825,25 @@ h3 {
   color: var(--brand-blue);
   font-size: 18px;
   font-weight: 900;
+}
+
+.productPriceStack {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.regularPrice {
+  color: #7b8794;
+  font-size: 15px;
+  font-weight: 800;
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+}
+
+.salePrice {
+  color: var(--brand-red);
 }
 
 .productFooter {

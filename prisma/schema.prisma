@@ -268,9 +268,12 @@ model Product {
   description     String
   shortDescription String           @default("")
   priceLabel      String            @default("")
+  regularPriceLabel String?
+  salePriceLabel  String?
   stripePaymentLink String?
   imageUrl        String?
   badge           String?
+  saleBadge       String?
   ratingLabel     String            @default("★★★★★")
   status          ProductStatus     @default(DRAFT)
   sortOrder       Int               @default(100)

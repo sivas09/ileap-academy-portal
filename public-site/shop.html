@@ -269,7 +269,8 @@
       }
 
       function badgeClass(product) {
-        const source = `${product.badge ?? ""} ${product.category ?? ""}`.toLowerCase();
+        const source = `${product.saleBadge ?? ""} ${product.badge ?? ""} ${product.category ?? ""}`.toLowerCase();
+        if (source.includes("sale")) return "badgeSale";
         if (source.includes("featured")) return "badgeFeatured";
         if (source.includes("speaking")) return "badgeRed";
         if (source.includes("worksheet")) return "badgeGreen";
@@ -294,11 +295,28 @@
         `;
       }
 
+      function displayPrice(product) {
+        return product.salePriceLabel || product.priceLabel || "Coming soon";
+      }
+
+      function priceMarkup(product) {
+        if (product.salePriceLabel) {
+          return `
+            <div class="productPriceStack" aria-label="Product price">
+              ${product.regularPriceLabel ? `<span class="regularPrice">${escapeHtml(product.regularPriceLabel)}</span>` : ""}
+              <strong class="productPrice salePrice">${escapeHtml(product.salePriceLabel)}</strong>
+            </div>
+          `;
+        }
+
+        return `<strong class="productPrice">${escapeHtml(product.priceLabel || "Coming soon")}</strong>`;
+      }
+
       function productCard(product) {
         const hasStripeLink = product.stripePaymentLink && stripeUrlPattern.test(product.stripePaymentLink);
-        const badge = product.badge || product.category || "iLEAP";
+        const badge = product.saleBadge || product.badge || product.category || "iLEAP";
         const action = hasStripeLink
-          ? `<a class="primaryButton productButton buyButton" href="${escapeHtml(product.stripePaymentLink)}" target="_blank" rel="noopener">Buy Now${product.priceLabel ? ` &ndash; ${escapeHtml(product.priceLabel)}` : ""}</a>
+          ? `<a class="primaryButton productButton buyButton" href="${escapeHtml(product.stripePaymentLink)}" target="_blank" rel="noopener">Buy Now${displayPrice(product) ? ` &ndash; ${escapeHtml(displayPrice(product))}` : ""}</a>
              <p class="paymentNote">Payments are securely processed by Stripe.</p>`
           : `<button class="secondaryButton inactiveButton productButton" type="button" disabled>Coming Soon</button>
              <a class="requestLink" href="mailto:ileap.academy.icat@gmail.com">Request Preview</a>`;
@@ -315,7 +333,7 @@
               <div class="rating" aria-label="Rating placeholder">${escapeHtml(product.ratingLabel || "★★★★★")}</div>
               <p class="productDescription">${escapeHtml(product.shortDescription || product.description)}</p>
               <div class="productFooter">
-                <strong class="productPrice">${escapeHtml(product.priceLabel || "Coming soon")}</strong>
+                ${priceMarkup(product)}
                 ${action}
               </div>
             </div>

@@ -85,9 +85,12 @@ export type Product = {
   description: string;
   shortDescription: string;
   priceLabel: string;
+  regularPriceLabel?: string | null;
+  salePriceLabel?: string | null;
   stripePaymentLink?: string | null;
   imageUrl?: string | null;
   badge?: string | null;
+  saleBadge?: string | null;
   ratingLabel: string;
   status: "DRAFT" | "PUBLISHED" | "ARCHIVED";
   sortOrder: number;
