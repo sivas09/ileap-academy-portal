@@ -24,6 +24,8 @@ const appUrl = process.env.APP_URL ?? "http://localhost:5174";
 const defaultNotificationEmail = process.env.DEFAULT_SUBMISSION_NOTIFICATION_EMAIL ?? "ileap.academy.icat@gmail.com";
 const allowedOrigins = new Set([appUrl, "http://localhost:5173", "http://localhost:5174"]);
 
+app.set("trust proxy", 1);
+
 if (process.env.NODE_ENV === "production" && !process.env.JWT_SECRET) {
   throw new Error("JWT_SECRET must be configured in production.");
 }
@@ -498,6 +500,55 @@ const loginSchema = z.object({
   password: z.string().min(8)
 });
 
+const maxFailedLoginAttempts = 5;
+const loginAttemptWindowMs = 15 * 60 * 1000;
+const loginLockoutMs = 15 * 60 * 1000;
+const failedLoginAttempts = new Map<string, { count: number; firstAttemptAt: number; lockedUntil?: number }>();
+
+function loginThrottleKey(type: "ip" | "email", value: string) {
+  return `${type}:${value.toLowerCase()}`;
+}
+
+function clientIp(req: express.Request) {
+  const forwardedFor = req.headers["x-forwarded-for"];
+  const forwardedIp = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor?.split(",")[0];
+  return (forwardedIp || req.ip || req.socket.remoteAddress || "unknown").trim();
+}
+
+function getLoginThrottle(req: express.Request, email: string) {
+  const keys = [
+    loginThrottleKey("ip", clientIp(req)),
+    loginThrottleKey("email", email)
+  ];
+  const now = Date.now();
+  const lockedEntry = keys
+    .map((key) => failedLoginAttempts.get(key))
+    .find((entry) => entry?.lockedUntil && entry.lockedUntil > now);
+
+  return { keys, isLocked: Boolean(lockedEntry) };
+}
+
+function recordFailedLogin(keys: string[]) {
+  const now = Date.now();
+  for (const key of keys) {
+    const current = failedLoginAttempts.get(key);
+    const entry = current && now - current.firstAttemptAt <= loginAttemptWindowMs
+      ? current
+      : { count: 0, firstAttemptAt: now };
+    entry.count += 1;
+    if (entry.count >= maxFailedLoginAttempts) {
+      entry.lockedUntil = now + loginLockoutMs;
+    }
+    failedLoginAttempts.set(key, entry);
+  }
+}
+
+function clearFailedLogins(keys: string[]) {
+  for (const key of keys) {
+    failedLoginAttempts.delete(key);
+  }
+}
+
 const forgotPasswordSchema = z.object({
   email: z.string().email()
 });
@@ -664,6 +715,11 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.post("/api/debug/auth-check", async (req, res) => {
+  if (process.env.NODE_ENV === "production") {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
   if (!process.env.AUTH_DEBUG_TOKEN || req.headers["x-debug-token"] !== process.env.AUTH_DEBUG_TOKEN) {
     res.status(404).json({ error: "Not found" });
     return;
@@ -750,6 +806,12 @@ app.post("/api/auth/login", async (req, res) => {
     return;
   }
 
+  const throttle = getLoginThrottle(req, input.data.email);
+  if (throttle.isLocked) {
+    res.status(429).json({ error: "Too many failed login attempts. Please wait a few minutes and try again." });
+    return;
+  }
+
   const user = await prisma.user.findUnique({
     where: { email: input.data.email },
     include: { student: { include: { level: true } } }
@@ -766,10 +828,12 @@ app.post("/api/auth/login", async (req, res) => {
   }
 
   if (!user || user.status === "DISABLED" || !passwordMatches) {
+    recordFailedLogin(throttle.keys);
     res.status(401).json({ error: "Invalid email or password" });
     return;
   }
 
+  clearFailedLogins(throttle.keys);
   const authUser = { id: user.id, role: user.role, email: user.email };
   await writeAudit(user.id, "LOGIN", "User", user.id);
 
@@ -833,7 +897,7 @@ app.post("/api/auth/reset-password", async (req, res) => {
   res.json({ ok: true });
 });
 
-app.get("/api/me", requireAuth, async (req, res) => {
+app.get("/api/me", requireAuth, requireActiveAccount, async (req, res) => {
   const user = await prisma.user.findUnique({
     where: { id: req.user!.id },
     include: { student: { include: { level: true } } }
@@ -860,7 +924,7 @@ app.post("/api/me/change-password", requireAuth, requireActiveAccount, async (re
   res.json({ ok: true });
 });
 
-app.get("/api/dashboard", requireAuth, async (req, res) => {
+app.get("/api/dashboard", requireAuth, requireActiveAccount, async (req, res) => {
   const user = await prisma.user.findUnique({
     where: { id: req.user!.id },
     include: { student: { include: { level: true } }, teacher: { include: { levels: { include: { level: true } } } } }
