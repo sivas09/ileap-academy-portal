@@ -33,7 +33,7 @@ body {
 }
 
 .shopPage {
-  background: #f6f7fb;
+  background: var(--brand-bg);
 }
 
 a {
@@ -453,11 +453,11 @@ h3 {
 .shopMain {
   max-width: 1240px;
   margin: 0 auto;
-  padding: 38px 28px 72px;
+  padding: 34px 28px 76px;
 }
 
 .shopCatalogHeader {
-  padding: 24px 0 28px;
+  padding: 24px 0 30px;
 }
 
 .breadcrumb {
@@ -475,13 +475,34 @@ h3 {
   text-decoration: none;
 }
 
-.shopCatalogHeader h1 {
+.shopHeroBanner {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(0, 41, 107, 0.1);
+  border-radius: 8px;
+  background: linear-gradient(135deg, #ffffff 0%, #e9f6fb 56%, #fff4e8 100%);
+  padding: clamp(28px, 5vw, 56px);
+  box-shadow: 0 18px 50px rgba(0, 41, 107, 0.08);
+}
+
+.shopHeroBanner::after {
+  position: absolute;
+  right: 34px;
+  bottom: -30px;
+  width: 170px;
+  height: 170px;
+  border: 18px solid rgba(0, 137, 202, 0.16);
+  border-radius: 50%;
+  content: "";
+}
+
+.shopHeroBanner h1 {
   max-width: none;
   margin-bottom: 12px;
   font-size: clamp(34px, 4.4vw, 56px);
 }
 
-.shopCatalogHeader p {
+.shopHeroBanner p:not(.eyebrow) {
   max-width: 720px;
   color: var(--muted);
   font-size: 18px;
@@ -527,13 +548,16 @@ h3 {
   white-space: nowrap;
 }
 
-.catalogGrid {
+.productGrid.catalogGrid {
+  display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 22px;
+  align-items: stretch;
 }
 
 .productCard {
   display: flex;
+  height: 100%;
   min-height: 100%;
   flex-direction: column;
   overflow: hidden;
@@ -552,7 +576,7 @@ h3 {
 .productImage {
   position: relative;
   display: grid;
-  min-height: 190px;
+  min-height: 210px;
   place-items: center;
   background: var(--soft-blue);
   color: var(--brand-blue);
@@ -580,8 +604,8 @@ h3 {
 
 .productImage span {
   display: grid;
-  width: 96px;
-  height: 118px;
+  width: 104px;
+  height: 126px;
   place-items: center;
   border: 2px solid currentColor;
   border-radius: 8px;
@@ -619,9 +643,14 @@ h3 {
 }
 
 .productCategory {
-  color: #64748b;
+  display: inline-flex;
+  width: fit-content;
+  border-radius: 999px;
+  background: rgba(0, 137, 202, 0.1);
+  color: var(--brand-blue);
   font-size: 11px;
   font-weight: 900;
+  padding: 5px 8px;
   text-transform: uppercase;
 }
 
@@ -654,6 +683,22 @@ h3 {
   font-size: 15px;
 }
 
+.inactiveButton.productButton {
+  border-color: #d6dce6;
+  background: #eef1f5;
+  color: #6b7280;
+}
+
+.requestLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  border: 1px solid rgba(0, 41, 107, 0.24);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
 .buyButton {
   border-color: var(--brand-blue);
   background: var(--brand-blue);
@@ -668,7 +713,7 @@ h3 {
 }
 
 .requestLink {
-  color: var(--brand-light-blue);
+  color: var(--brand-blue);
   font-size: 14px;
   font-weight: 900;
   text-align: center;
@@ -717,7 +762,7 @@ footer a {
     grid-template-columns: 1fr;
   }
 
-  .catalogGrid {
+  .productGrid.catalogGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -764,7 +809,7 @@ footer a {
     width: 100%;
   }
 
-  .catalogGrid {
+  .productGrid.catalogGrid {
     grid-template-columns: 1fr;
   }
 
