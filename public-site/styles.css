@@ -214,6 +214,7 @@ h3 {
 
 .inactiveButton {
   cursor: default;
+  opacity: 0.76;
 }
 
 .heroVisual {
@@ -516,6 +517,14 @@ h3 {
   width: 100%;
   border: 1px solid rgba(0, 41, 107, 0.18);
   font-size: 15px;
+}
+
+.requestLink {
+  color: var(--brand-light-blue);
+  font-size: 14px;
+  font-weight: 900;
+  text-align: center;
+  text-decoration: none;
 }
 
 button.secondaryButton {
