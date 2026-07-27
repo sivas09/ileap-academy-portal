@@ -276,6 +276,11 @@ function productForClient<T extends Product & { resources?: Array<{ resource: Re
   };
 }
 
+const publishedProductWhere = {
+  status: "PUBLISHED" as const,
+  isActive: true
+};
+
 async function validateCurriculumScope(input: { levelId?: string | null; topicId?: string | null; lessonId?: string | null }) {
   const topicId = input.topicId || null;
   const lessonId = input.lessonId || null;
@@ -770,7 +775,7 @@ app.get("/api/public/site-content", async (_req, res) => {
 
 app.get("/api/public/products", async (_req, res) => {
   const products = await prisma.product.findMany({
-    where: { status: "PUBLISHED" },
+    where: publishedProductWhere,
     include: { level: true, resources: { include: { resource: true } } },
     orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }]
   });
@@ -779,7 +784,7 @@ app.get("/api/public/products", async (_req, res) => {
 
 app.get("/api/products", async (_req, res) => {
   const products = await prisma.product.findMany({
-    where: { status: "PUBLISHED" },
+    where: publishedProductWhere,
     include: { level: true, resources: { include: { resource: true } } },
     orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }]
   });
@@ -1026,8 +1031,8 @@ app.get("/api/dashboard", requireAuth, requireActiveAccount, async (req, res) =>
     user.role === "ADMIN"
       ? {}
       : user.role === "STUDENT"
-        ? { isActive: true, OR: [{ levelId: null }, { levelId: studentLevelId ?? "" }] }
-        : { isActive: true, OR: [{ levelId: null }, { levelId: { in: teacherLevelIds } }] };
+        ? { ...publishedProductWhere, OR: [{ levelId: null }, { levelId: studentLevelId ?? "" }] }
+        : { ...publishedProductWhere, OR: [{ levelId: null }, { levelId: { in: teacherLevelIds } }] };
   const products = await prisma.product.findMany({
     where: productWhere,
     include: { level: true, resources: { include: { resource: true } } },
@@ -1036,7 +1041,7 @@ app.get("/api/dashboard", requireAuth, requireActiveAccount, async (req, res) =>
   const productsWithPurchaseStatus = products.map((product) => ({
     ...product,
     resources: product.resources.map(productResourceForClient),
-    isPurchased: product.resources.some((item) => entitlementIds.has(item.resourceId))
+    isPurchased: product.resources.length > 0 && product.resources.every((item) => entitlementIds.has(item.resourceId))
   }));
 
   const submissionWhere =
@@ -1872,8 +1877,13 @@ app.post("/api/shop/checkout", requireAuth, requireActiveAccount, requireRole("S
     where: { id: input.data.productId },
     include: { resources: true }
   });
-  if (!product || !product.isActive) {
+  if (!product || product.status !== "PUBLISHED" || !product.isActive) {
     res.status(404).json({ error: "Product not found" });
+    return;
+  }
+
+  if (product.priceCents < 50) {
+    res.status(400).json({ error: "This product is not ready for checkout. Ask an admin to confirm its price." });
     return;
   }
 

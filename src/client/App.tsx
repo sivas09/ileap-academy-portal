@@ -80,6 +80,38 @@ function levelCardText(level: Level, content: SiteContent) {
   return { title: content.grade789Title, text: content.grade789Text };
 }
 
+function parsePriceCents(value: string) {
+  const normalized = value.replace(/[$,\s]/g, "");
+  const amount = Number(normalized);
+  if (!Number.isFinite(amount) || amount < 0) return null;
+  return Math.round(amount * 100);
+}
+
+function currencyFromLabel(label: string) {
+  return label.toLowerCase().includes("cad") ? "cad" : "usd";
+}
+
+function ProductArtwork({ product }: { product: Product | PublicProduct }) {
+  return (
+    <div className={product.imageUrl ? "productArtwork" : "productArtwork fallbackArtwork"}>
+      {product.imageUrl && (
+        <img
+          src={product.imageUrl}
+          alt=""
+          onError={(event) => {
+            event.currentTarget.hidden = true;
+            event.currentTarget.parentElement?.classList.add("fallbackArtwork");
+          }}
+        />
+      )}
+      <div className="productArtworkFallback">
+        <img src="/Logo_large.jpg" alt="" />
+        <span>{product.category || product.level?.gradeBand || "Writing Resource"}</span>
+      </div>
+    </div>
+  );
+}
+
 export function App() {
   const [session, setSession] = useState<Session | null>(storedSession);
   const [view, setView] = useState("dashboard");
@@ -254,6 +286,7 @@ function PublicSite({ onLogin, sessionMessage }: { onLogin: (session: Session) =
         <div className="productPreviewGrid">
           {products.slice(0, 3).map((product) => (
             <article className="shopCard" key={product.id}>
+              <ProductArtwork product={product} />
               <div className="shopCardTop">
                 <span className="statusPill">{product.level?.gradeBand ?? "All levels"}</span>
                 <strong>{money(product.priceCents)}</strong>
@@ -372,6 +405,7 @@ function PublicShop({ products }: { products: PublicProduct[] }) {
         )}
         {filteredProducts.map((product) => (
           <article className="shopCard publicProductCard" key={product.id}>
+            <ProductArtwork product={product} />
             <div className="shopCardTop">
               <span className="statusPill">{product.level?.gradeBand ?? "All levels"}</span>
               <strong>{money(product.priceCents)}</strong>
@@ -1377,6 +1411,7 @@ function Shop({ products, token }: { products: DashboardData["products"]; token:
         {products.length === 0 && <section className="panel wide"><p className="empty">No shop products are available for your level yet.</p></section>}
         {products.map((product) => (
           <article className="resourceCard product" key={product.id}>
+            <ProductArtwork product={product} />
             <strong>{product.title}</strong>
             <span>{product.level?.gradeBand ?? "All levels"} | {product.type}</span>
             <p>{product.description}</p>
@@ -2390,7 +2425,16 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
   async function createProduct() {
     setMessage("");
     setError("");
-    const priceCents = Math.round(Number(product.priceDollars) * 100);
+    const priceCents = parsePriceCents(product.priceDollars);
+    const sortOrder = Number(product.sortOrder);
+    if (priceCents === null || priceCents < 50) {
+      setError("Enter a valid product price of at least $0.50.");
+      return;
+    }
+    if (!Number.isInteger(sortOrder) || sortOrder < 0) {
+      setError("Sort order must be a whole number of 0 or greater.");
+      return;
+    }
     try {
       await api(
         "/admin/products",
@@ -2411,10 +2455,10 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
             saleBadge: product.saleBadge || null,
             ratingLabel: product.ratingLabel,
             status: product.status,
-            sortOrder: Number(product.sortOrder),
+            sortOrder,
             type: product.type,
-            priceCents: Number.isFinite(priceCents) ? priceCents : 0,
-            currency: product.priceLabel.toLowerCase().includes("cad") ? "cad" : "usd",
+            priceCents,
+            currency: currencyFromLabel(product.priceLabel),
             levelId: product.levelId || null,
             resourceIds: product.resourceIds,
             isActive: product.isActive
@@ -2490,9 +2534,18 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
   async function updateProduct(productId: string) {
     const draft = productDrafts[productId];
     if (!draft) return;
-    const priceCents = Math.round(Number(draft.priceDollars) * 100);
+    const priceCents = parsePriceCents(draft.priceDollars);
+    const sortOrder = Number(draft.sortOrder);
     setMessage("");
     setError("");
+    if (priceCents === null || priceCents < 50) {
+      setError("Enter a valid product price of at least $0.50.");
+      return;
+    }
+    if (!Number.isInteger(sortOrder) || sortOrder < 0) {
+      setError("Sort order must be a whole number of 0 or greater.");
+      return;
+    }
     try {
       await api(`/admin/products/${productId}`, {
         method: "PUT",
@@ -2511,10 +2564,10 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
           saleBadge: draft.saleBadge || null,
           ratingLabel: draft.ratingLabel,
           status: draft.status,
-          sortOrder: Number(draft.sortOrder),
+          sortOrder,
           type: draft.type,
-          priceCents: Number.isFinite(priceCents) ? priceCents : 0,
-          currency: draft.priceLabel.toLowerCase().includes("cad") ? "cad" : "usd",
+          priceCents,
+          currency: currencyFromLabel(draft.priceLabel),
           levelId: draft.levelId || null,
           resourceIds: draft.resourceIds,
           isActive: draft.isActive
@@ -2548,7 +2601,7 @@ function AdminTools({ data, token, role, onChange, onResourceSaved }: { data: Da
         method: "PUT",
         body: JSON.stringify({
           status,
-          isActive: status === "ARCHIVED" ? false : undefined
+          isActive: status === "PUBLISHED"
         })
       }, token);
       setMessage(status === "PUBLISHED" ? "Product published." : status === "DRAFT" ? "Product unpublished." : "Product archived.");

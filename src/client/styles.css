@@ -471,6 +471,56 @@ textarea:focus-visible {
   box-shadow: var(--shadow-sm);
 }
 
+.productArtwork {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border: 1px solid rgba(0, 41, 107, 0.1);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(0, 137, 202, 0.1), rgba(0, 128, 0, 0.08)),
+    #f8fcff;
+}
+
+.productArtwork > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.productArtworkFallback {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  padding: 16px;
+  text-align: center;
+}
+
+.productArtwork:not(.fallbackArtwork) .productArtworkFallback {
+  display: none;
+}
+
+.productArtworkFallback img {
+  width: 58px;
+  height: 58px;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 8px;
+  padding: 6px;
+  box-shadow: var(--shadow-sm);
+}
+
+.productArtworkFallback span {
+  color: var(--brand-blue);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
 .shopCard:hover {
   border-color: rgba(0, 137, 202, 0.3);
   box-shadow: var(--shadow-md);
@@ -830,6 +880,14 @@ textarea {
 .resourceCard.locked {
   background: #fbfcff;
   border-style: dashed;
+}
+
+.resourceCard.product {
+  align-content: start;
+}
+
+.resourceCard.product .productArtwork {
+  margin: -2px -2px 2px;
 }
 
 .assignmentCard {
