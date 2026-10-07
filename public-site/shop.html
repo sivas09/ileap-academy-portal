@@ -10,6 +10,8 @@
     />
     <link rel="icon" href="./Logo_large.jpg" />
     <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="/video-navigation.css" />
+    <script src="/video-navigation.js" defer></script>
   </head>
   <body class="shopPage">
     <header class="siteHeader">
@@ -22,7 +24,16 @@
         <a href="./index.html#levels">Levels</a>
         <a href="./index.html#how">How It Works</a>
         <a href="./shop.html" aria-current="page">Shop</a>
-        <a href="./grade-7-8-9-essay-writing.html">Video Lessons</a>
+        <!-- video-navigation:start -->
+      <details class="video-dropdown">
+        <summary aria-controls="video-subject-menu">Video Lessons <span aria-hidden="true">▾</span></summary>
+        <ul id="video-subject-menu" class="video-subject-menu">
+          <li><a href="/grade-7-8-9-essay-writing">English Essay Writing</a></li>
+          <li><a href="/video-lessons/math">Math</a></li>
+          <li><a href="/video-lessons/grammar">Grammar</a></li>
+        </ul>
+      </details>
+      <!-- video-navigation:end -->
         <a class="navPortal" href="https://english.ileapacademy.com/">Portal Login</a>
       </nav>
     </header>

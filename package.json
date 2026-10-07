@@ -7,6 +7,11 @@
     "node": ">=22.12.0"
   },
   "scripts": {
+    "build:public": "node scripts/build-public-site.mjs",
+    "check:public": "node scripts/build-public-site.mjs --check && node --check public-site/video-navigation.js && node --check scripts/video-lesson-components.mjs && node --check tests/static-server.mjs",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.server.json --noEmit",
+    "test": "playwright test",
+    "preview:public": "node tests/static-server.mjs",
     "dev": "concurrently \"npm:dev:api\" \"npm:dev:web\"",
     "dev:api": "tsx watch src/server/index.ts",
     "dev:web": "vite --host 0.0.0.0 --port 5174",
@@ -55,6 +60,7 @@
     "zod": "^3.25.28"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@types/bcryptjs": "^2.4.6",
     "concurrently": "^9.1.2"
   }

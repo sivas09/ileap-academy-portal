@@ -6,3 +6,5 @@ uploads
 *.tsbuildinfo
 tmp_*
 prisma/*.db
+test-results/
+playwright-report/

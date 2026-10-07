@@ -970,6 +970,7 @@ button.secondaryButton {
 
 footer {
   justify-content: center;
+  flex-wrap: wrap;
   min-height: 86px;
   border-top: 1px solid var(--line);
   padding: 20px 28px;
@@ -983,6 +984,8 @@ footer img {
 }
 
 footer a {
+  max-width: 100%;
+  overflow-wrap: anywhere;
   color: var(--brand-light-blue);
   font-weight: 900;
   text-decoration: none;

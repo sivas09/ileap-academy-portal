@@ -2,6 +2,8 @@
 
 A full-stack starter for an iLEAP Academy family portal with parent/student workflows.
 
+The static public website is in `public-site/`. For its subject navigation, shared video lesson data, generation, preview, and browser tests, see [Video lessons admin guide](docs/video-lessons-admin-guide.md).
+
 ## Features
 
 - Email/password login with member and admin roles
