@@ -18,7 +18,7 @@ export const subjects = [
   {
     id: 'grammar', label: 'Grammar', route: '/video-lessons/grammar', file: 'video-lessons/grammar/index.html',
     title: 'Grammar Video Lessons | iLEAP Academy',
-    description: 'Explore iLEAP Academy’s Grammar video lesson library. New lessons to strengthen sentence structure, punctuation, and language skills are coming soon.',
+    description: 'Watch iLEAP Academy’s Grammar video lessons for Grades 7/8/9. Learn punctuation, capitalization, parts of speech, sentence structure, subject–verb agreement, and more.',
     eyebrow: 'Grammar Video Lessons', heading: 'Stronger sentences start with clear grammar.',
     lead: 'A dedicated space to strengthen sentence structure, punctuation, and everyday language skills.'
   }

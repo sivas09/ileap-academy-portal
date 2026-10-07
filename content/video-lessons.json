@@ -190,5 +190,101 @@
     "learningFocus": "Review final writing for clarity, grammar, and polish.",
     "videoUrl": "https://www.youtube.com/watch?v=KrlN4a_SmQ0",
     "order": 24
+  },
+  {
+    "subject": "grammar",
+    "grade": "7/8/9",
+    "title": "Punctuation Marks Explained | Commas, Semicolons, Colons, Apostrophes & More | Tip #12",
+    "learningFocus": "Understand and correctly use common punctuation marks, including commas, semicolons, colons, apostrophes, hyphens, and dashes.",
+    "videoUrl": "https://youtu.be/9Dw3O937wCo",
+    "order": 1
+  },
+  {
+    "subject": "grammar",
+    "grade": "7/8/9",
+    "title": "Capitalization Rules for Essays & Exams | Tip #11",
+    "learningFocus": "Apply capitalization rules correctly in essays, exams, titles, names, and sentences.",
+    "videoUrl": "https://youtu.be/GueL75BjKmY",
+    "order": 2
+  },
+  {
+    "subject": "grammar",
+    "grade": "7/8/9",
+    "title": "Comma Rules for Essays & Exams | Avoid These Common Grammar Mistakes | Skill #10",
+    "learningFocus": "Use commas correctly and avoid common comma mistakes such as comma splices and unnecessary commas.",
+    "videoUrl": "https://youtu.be/mBGuAZM-ncQ",
+    "order": 3
+  },
+  {
+    "subject": "grammar",
+    "grade": "7/8/9",
+    "title": "Word vs Phrase vs Clause vs Sentence | English Grammar | Tip #8",
+    "learningFocus": "Distinguish between words, phrases, clauses, and complete sentences.",
+    "videoUrl": "https://youtu.be/j9CBBQ0MTUI",
+    "order": 4
+  },
+  {
+    "subject": "grammar",
+    "grade": "7/8/9",
+    "title": "Parts of Speech Made Easy with IVANCAPPA | English Grammar | Tip #9",
+    "learningFocus": "Identify and understand the major parts of speech using the IVANCAPPA method.",
+    "videoUrl": "https://youtu.be/ZJ_B1s-W7Sg",
+    "order": 5
+  },
+  {
+    "subject": "grammar",
+    "grade": "7/8/9",
+    "title": "Adjective Order Made Easy | NOSA-C Rule | English Grammar | Tip #7",
+    "learningFocus": "Place multiple adjectives in the correct order using the NOSA-C adjective-order rule.",
+    "videoUrl": "https://youtu.be/w4bXV5Pe9_4",
+    "order": 6
+  },
+  {
+    "subject": "grammar",
+    "grade": "7/8/9",
+    "title": "Coordinating vs Subordinating Conjunctions | FANBOYS Explained Simply | Tip #6",
+    "learningFocus": "Distinguish between coordinating and subordinating conjunctions and use them correctly in sentences.",
+    "videoUrl": "https://youtu.be/rbqrOiUGBeU",
+    "order": 7
+  },
+  {
+    "subject": "grammar",
+    "grade": "7/8/9",
+    "title": "How to Fix Run-On Sentences | Comma Splices & Fused Sentences Explained | Tip #5",
+    "learningFocus": "Identify fused sentences and comma splices and correct common run-on sentence errors.",
+    "videoUrl": "https://youtu.be/wyzoB4ClIGg",
+    "order": 8
+  },
+  {
+    "subject": "grammar",
+    "grade": "7/8/9",
+    "title": "How to Join Two Sentences Correctly (Avoid Run-Ons) | 5 Rules | Tip #4",
+    "learningFocus": "Learn five correct ways to join two complete sentences without creating run-ons or comma splices.",
+    "videoUrl": "https://youtu.be/AeS9Y-c3YH0",
+    "order": 9
+  },
+  {
+    "subject": "grammar",
+    "grade": "7/8/9",
+    "title": "How to Make Subject–Verb Agreement Easy | The Subject Detective Method | Tip #3",
+    "learningFocus": "Identify the true subject of a sentence and choose the correct singular or plural verb.",
+    "videoUrl": "https://youtu.be/TcnQn7d74HY",
+    "order": 10
+  },
+  {
+    "subject": "grammar",
+    "grade": "7/8/9",
+    "title": "Finite vs. Non-Finite Verbs | Grammar #2 | Infinitives, Gerunds & Participles",
+    "learningFocus": "Distinguish finite verbs from non-finite verbs, including infinitives, gerunds, and participles.",
+    "videoUrl": "https://youtu.be/Jx_ZZ8HDdgM",
+    "order": 11
+  },
+  {
+    "subject": "grammar",
+    "grade": "7/8/9",
+    "title": "Sentence Fragments Explained | How to Spot & Fix Them | Grammar Tip #1",
+    "learningFocus": "Identify sentence fragments and revise them into complete sentences.",
+    "videoUrl": "https://youtu.be/2Bb35sXfxnU",
+    "order": 12
   }
 ]

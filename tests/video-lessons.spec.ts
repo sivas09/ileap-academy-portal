@@ -1,14 +1,33 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 
 const originalLessons = JSON.parse(readFileSync(new URL('./fixtures/original-essay-lessons.json', import.meta.url), 'utf8')) as {
   title: string; learningFocus: string; videoUrl: string; order: number;
 }[];
+const lessonData = JSON.parse(readFileSync(new URL('../content/video-lessons.json', import.meta.url), 'utf8')) as {
+  subject: string; grade: string; title: string; learningFocus: string; videoUrl: string; order: number;
+}[];
 const subjects = [
-  { name: 'English Essay Writing', route: '/grade-7-8-9-essay-writing' },
-  { name: 'Math', route: '/video-lessons/math' },
-  { name: 'Grammar', route: '/video-lessons/grammar' }
+  { id: 'english-essay-writing', name: 'English Essay Writing', route: '/grade-7-8-9-essay-writing' },
+  { id: 'math', name: 'Math', route: '/video-lessons/math' },
+  { id: 'grammar', name: 'Grammar', route: '/video-lessons/grammar' }
 ];
+
+async function expectSubjectContent(page: Page, subjectId: string) {
+  const lessons = lessonData.filter(lesson => lesson.subject === subjectId).sort((a, b) => a.order - b.order);
+  if (!lessons.length) {
+    await expect(page.getByRole('heading', { name: 'Coming soon' })).toBeVisible();
+    await expect(page.locator('table')).toHaveCount(0);
+    return;
+  }
+  await expect(page.getByRole('heading', { name: 'Coming soon' })).toHaveCount(0);
+  await expect(page.getByRole('columnheader', { name: 'Learning Focus', exact: true })).toHaveCount(1);
+  const rows = await page.locator('tbody tr').evaluateAll(elements => elements.map(row => ({
+    order: Number(row.children[0].textContent), title: row.children[1].textContent,
+    learningFocus: row.children[2].textContent, videoUrl: row.querySelector('a')?.getAttribute('href')
+  })));
+  expect(rows).toEqual(lessons.map(({ order, title, learningFocus, videoUrl }) => ({ order, title, learningFocus, videoUrl })));
+}
 
 for (const route of ['/', '/shop.html', ...subjects.map(subject => subject.route)]) {
   test(`subject dropdown and navigation on ${route}`, async ({ page, isMobile }) => {
@@ -27,7 +46,7 @@ for (const route of ['/', '/shop.html', ...subjects.map(subject => subject.route
     }
     await menu.getByRole('link', { name: 'Math', exact: true }).click();
     await expect(page).toHaveURL(/\/video-lessons\/math$/);
-    await expect(page.getByRole('heading', { name: 'Coming soon' })).toBeVisible();
+    await expectSubjectContent(page, 'math');
   });
 }
 
@@ -73,7 +92,7 @@ test('all original 24 lessons, titles, learning focus and video links are preser
   await expect(page.locator('tbody tr')).toHaveCount(24);
 });
 
-test('subject selector highlights each destination with SEO and polished coming soon states', async ({ page }) => {
+test('subject selector highlights each destination with SEO and the appropriate lesson or coming soon state', async ({ page }) => {
   await page.goto('/grade-7-8-9-essay-writing');
   for (const subject of [subjects[1], subjects[2], subjects[0]]) {
     const selector = page.getByRole('navigation', { name: 'Video lesson subjects', exact: true });
@@ -85,9 +104,8 @@ test('subject selector highlights each destination with SEO and polished coming 
     await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /.+/);
     if (subject.name !== 'English Essay Writing') {
       await expect(page).toHaveTitle(`${subject.name} Video Lessons | iLEAP Academy`);
-      await expect(page.getByRole('heading', { name: 'Coming soon' })).toBeVisible();
-      await expect(page.locator('table')).toHaveCount(0);
     }
+    await expectSubjectContent(page, subject.id);
   }
 });
 
@@ -100,6 +118,8 @@ test('pages, open dropdown, and lesson cards fit the viewport', async ({ page },
       await page.screenshot({ path: testInfo.outputPath('essay-lessons.png'), fullPage: true });
     } else if (subject.name === 'Math') {
       await page.screenshot({ path: testInfo.outputPath('math-coming-soon.png'), fullPage: true });
+    } else if (subject.name === 'Grammar') {
+      await page.screenshot({ path: testInfo.outputPath('grammar-lessons.png'), fullPage: true });
     }
   }
 });
@@ -112,8 +132,26 @@ test('lessons and native subject navigation work without JavaScript', async ({ b
   const navigation = page.getByRole('navigation', { name: 'Main navigation', exact: true });
   await navigation.locator('summary').click();
   await navigation.getByRole('link', { name: 'Grammar', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Coming soon' })).toBeVisible();
+  await expectSubjectContent(page, 'grammar');
   await context.close();
+});
+
+test('the 12 supplied Grammar lessons retain their grade, sequential order and exact YouTube links', async ({ page }) => {
+  const grammar = lessonData.filter(lesson => lesson.subject === 'grammar');
+  expect(grammar).toHaveLength(12);
+  expect(grammar.map(lesson => lesson.grade)).toEqual(Array(12).fill('7/8/9'));
+  expect(grammar.map(lesson => lesson.order)).toEqual(Array.from({ length: 12 }, (_, index) => index + 1));
+  expect(grammar.map(lesson => lesson.videoUrl)).toEqual([
+    'https://youtu.be/9Dw3O937wCo', 'https://youtu.be/GueL75BjKmY',
+    'https://youtu.be/mBGuAZM-ncQ', 'https://youtu.be/j9CBBQ0MTUI',
+    'https://youtu.be/ZJ_B1s-W7Sg', 'https://youtu.be/w4bXV5Pe9_4',
+    'https://youtu.be/rbqrOiUGBeU', 'https://youtu.be/wyzoB4ClIGg',
+    'https://youtu.be/AeS9Y-c3YH0', 'https://youtu.be/TcnQn7d74HY',
+    'https://youtu.be/Jx_ZZ8HDdgM', 'https://youtu.be/2Bb35sXfxnU'
+  ]);
+  await page.goto('/video-lessons/grammar');
+  await expectSubjectContent(page, 'grammar');
+  await expect(page.locator('meta[name="description"]')).not.toHaveAttribute('content', /coming soon/i);
 });
 
 test('navigation and subjects fit a narrow 320px mobile screen', async ({ page }) => {
