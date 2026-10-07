@@ -223,6 +223,14 @@
       background: #fff;
     }
 
+    /* Use the same columns for every subject; mobile retains the stacked cards. */
+    @media (min-width: 801px) {
+      table { table-layout: fixed; }
+      th:nth-child(1) { width: 72px; }
+      th:nth-child(2) { width: 36%; }
+      th:nth-child(4) { width: 96px; }
+    }
+
     th,
     td {
       padding: 14px 16px;

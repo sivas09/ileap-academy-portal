@@ -110,10 +110,18 @@ test('subject selector highlights each destination with SEO and the appropriate 
 });
 
 test('pages, open dropdown, and lesson cards fit the viewport', async ({ page }, testInfo) => {
+  let essayColumns: { width: number; padding: string }[] = [];
   for (const subject of subjects) {
     await page.goto(subject.route);
     await page.getByRole('navigation', { name: 'Main navigation', exact: true }).locator('summary').click();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    if (page.viewportSize()!.width > 800 && subject.id !== 'math') {
+      const columns = await page.locator('thead th').evaluateAll(cells => cells.map(cell => ({
+        width: cell.getBoundingClientRect().width, padding: getComputedStyle(cell).padding
+      })));
+      if (subject.id === 'english-essay-writing') essayColumns = columns;
+      else expect(columns).toEqual(essayColumns);
+    }
     if (subject.name === 'English Essay Writing') {
       await page.screenshot({ path: testInfo.outputPath('essay-lessons.png'), fullPage: true });
     } else if (subject.name === 'Math') {
