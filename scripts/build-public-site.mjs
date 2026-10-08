@@ -1,20 +1,23 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { subjects, subjectPage, videoDropdown } from './video-lesson-components.mjs';
+import { subjects, mathGradeBands, subjectPage, videoDropdown } from './video-lesson-components.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const check = process.argv.includes('--check');
 const lessons = JSON.parse(await readFile(resolve(root, 'content/video-lessons.json'), 'utf8'));
 const orders = new Set();
 for (const lesson of lessons) {
+  const isMath = lesson.subject === 'math';
+  const orderKey = isMath ? `${lesson.subject}:${lesson.gradeBand}:${lesson.order}` : `${lesson.subject}:${lesson.order}`;
   if (!subjects.some(subject => subject.id === lesson.subject) ||
-      !['grade', 'title', 'learningFocus', 'videoUrl'].every(field => typeof lesson[field] === 'string' && lesson[field].trim()) ||
-      !Number.isInteger(lesson.order) || lesson.order < 1 || orders.has(`${lesson.subject}:${lesson.order}`) ||
+      ![...(isMath ? ['gradeBand'] : ['grade']), 'title', 'learningFocus', 'videoUrl'].every(field => typeof lesson[field] === 'string' && lesson[field].trim()) ||
+      (isMath && !mathGradeBands.some(band => band.gradeBand === lesson.gradeBand)) ||
+      !Number.isInteger(lesson.order) || lesson.order < 1 || orders.has(orderKey) ||
       new URL(lesson.videoUrl).protocol !== 'https:') {
     throw new Error(`Invalid lesson: ${JSON.stringify(lesson)}`);
   }
-  orders.add(`${lesson.subject}:${lesson.order}`);
+  orders.add(orderKey);
 }
 
 async function emit(file, content) {
@@ -30,8 +33,8 @@ async function emit(file, content) {
   }
 }
 
-for (const subject of subjects) {
-  const html = subjectPage(subject, lessons.filter(lesson => lesson.subject === subject.id));
+for (const subject of [...subjects, ...mathGradeBands]) {
+  const html = subjectPage(subject, lessons.filter(lesson => lesson.subject === subject.id && (!subject.gradeBand || lesson.gradeBand === subject.gradeBand)));
   await emit(`public-site/${subject.file}`, html);
   // Preserve the original standalone essay artifact as well as the public site's copy.
   if (subject.id === 'english-essay-writing') await emit(subject.file, html);

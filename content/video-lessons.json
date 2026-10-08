@@ -286,5 +286,173 @@
     "learningFocus": "Identify sentence fragments and revise them into complete sentences.",
     "videoUrl": "https://youtu.be/2Bb35sXfxnU",
     "order": 12
+  },
+  {
+    "subject": "math",
+    "gradeBand": "5-6",
+    "title": "Decimal Addition & Place Value",
+    "learningFocus": "Use place value to align and add decimal numbers.",
+    "videoUrl": "https://youtu.be/IBtIlnDtv3Y",
+    "order": 1
+  },
+  {
+    "subject": "math",
+    "gradeBand": "5-6",
+    "title": "Types of Triangles",
+    "learningFocus": "Classify triangles using their side lengths and angles.",
+    "videoUrl": "https://youtu.be/C3Fm_oHndM4",
+    "order": 2
+  },
+  {
+    "subject": "math",
+    "gradeBand": "5-6",
+    "title": "Perimeter",
+    "learningFocus": "Calculate the perimeter of common two-dimensional shapes.",
+    "videoUrl": "https://youtu.be/lLzOUVal_0M",
+    "order": 3
+  },
+  {
+    "subject": "math",
+    "gradeBand": "5-6",
+    "title": "Shaded Rectangle Area",
+    "learningFocus": "Find the area of a shaded region within a rectangle.",
+    "videoUrl": "https://youtu.be/XH3XOAQr0Bs",
+    "order": 4
+  },
+  {
+    "subject": "math",
+    "gradeBand": "5-6",
+    "title": "Triangle Hidden Rules",
+    "learningFocus": "Look for patterns and relationships in triangle problems.",
+    "videoUrl": "https://youtu.be/NMxhdosgcqw",
+    "order": 5
+  },
+  {
+    "subject": "math",
+    "gradeBand": "5-6",
+    "title": "Geometry Logic",
+    "learningFocus": "Use logical reasoning to solve geometry problems.",
+    "videoUrl": "https://youtu.be/ys2clRyzdY8",
+    "order": 6
+  },
+  {
+    "subject": "math",
+    "gradeBand": "5-6",
+    "title": "Combination",
+    "learningFocus": "Explore how choices can be combined to form different groups.",
+    "videoUrl": "https://youtu.be/QS7yiHp7ZsE",
+    "order": 7
+  },
+  {
+    "subject": "math",
+    "gradeBand": "7-8",
+    "title": "Absolute Value – Part 1",
+    "learningFocus": "Understand absolute value as distance from zero.",
+    "videoUrl": "https://youtu.be/n7fVF1_jPhY",
+    "order": 1
+  },
+  {
+    "subject": "math",
+    "gradeBand": "7-8",
+    "title": "Absolute Value – Part 2",
+    "learningFocus": "Apply absolute value to numerical expressions and problems.",
+    "videoUrl": "https://youtu.be/cc4wCzkIidA",
+    "order": 2
+  },
+  {
+    "subject": "math",
+    "gradeBand": "7-8",
+    "title": "Exponents – Part 1",
+    "learningFocus": "Understand exponent notation and the basic rules of powers.",
+    "videoUrl": "https://youtu.be/G81P_rAIaXc",
+    "order": 3
+  },
+  {
+    "subject": "math",
+    "gradeBand": "7-8",
+    "title": "Exponents – Part 2",
+    "learningFocus": "Apply exponent rules to simplify expressions involving powers.",
+    "videoUrl": "https://youtu.be/o5md9MnH_Kc",
+    "order": 4
+  },
+  {
+    "subject": "math",
+    "gradeBand": "7-8",
+    "title": "Square Roots",
+    "learningFocus": "Understand square roots and their relationship to squaring numbers.",
+    "videoUrl": "https://youtu.be/sZPjolkKnOg",
+    "order": 5
+  },
+  {
+    "subject": "math",
+    "gradeBand": "7-8",
+    "title": "Radicals – Part 1",
+    "learningFocus": "Understand radical notation and its connection to roots.",
+    "videoUrl": "https://youtu.be/jgQ_PPzpDRw",
+    "order": 6
+  },
+  {
+    "subject": "math",
+    "gradeBand": "7-8",
+    "title": "Radicals – Part 2: Higher Roots",
+    "learningFocus": "Understand higher roots and their relationship to powers.",
+    "videoUrl": "https://youtu.be/C9H02hqJIis",
+    "order": 7
+  },
+  {
+    "subject": "math",
+    "gradeBand": "7-8",
+    "title": "Radicals – Part 3: Adding & Subtracting",
+    "learningFocus": "Add and subtract radical expressions by combining like radicals.",
+    "videoUrl": "https://youtu.be/7AXYY05jXcA",
+    "order": 8
+  },
+  {
+    "subject": "math",
+    "gradeBand": "7-8",
+    "title": "Radicals – Part 4: Multiplying & Dividing",
+    "learningFocus": "Multiply and divide radical expressions.",
+    "videoUrl": "https://youtu.be/0hhFlfFPrO4",
+    "order": 9
+  },
+  {
+    "subject": "math",
+    "gradeBand": "7-8",
+    "title": "Scientific Notation",
+    "learningFocus": "Write very large and very small numbers using scientific notation.",
+    "videoUrl": "https://youtu.be/AGD3Dy8HcTA",
+    "order": 10
+  },
+  {
+    "subject": "math",
+    "gradeBand": "7-8",
+    "title": "Cross Multiplication",
+    "learningFocus": "Use cross multiplication to solve proportions.",
+    "videoUrl": "https://youtu.be/OCMSYDf5Gf8",
+    "order": 11
+  },
+  {
+    "subject": "math",
+    "gradeBand": "7-8",
+    "title": "Inequalities",
+    "learningFocus": "Understand inequalities and compare quantities using inequality symbols.",
+    "videoUrl": "https://youtu.be/VUv8ldd7zps",
+    "order": 12
+  },
+  {
+    "subject": "math",
+    "gradeBand": "7-8",
+    "title": "Parallel Lines & Angles",
+    "learningFocus": "Use angle relationships formed by parallel lines and a transversal.",
+    "videoUrl": "https://youtu.be/0Z39BcMr3tI",
+    "order": 13
+  },
+  {
+    "subject": "math",
+    "gradeBand": "7-8",
+    "title": "Geometry Q10",
+    "learningFocus": "Apply geometric reasoning to solve a geometry question.",
+    "videoUrl": "https://youtu.be/7BIIkPKeaFk",
+    "order": 14
   }
 ]
